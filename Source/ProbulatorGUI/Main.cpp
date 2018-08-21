@@ -763,7 +763,7 @@ int main(int argc, char** argv)
 	glfwSetCharCallback(window, cbChar);
 	glfwSetCursorPosCallback(window, cbCursorPos);
 
-	glfwSwapInterval(1); // vsync ON
+    glfwSwapInterval(0); // vsync ON
 
 	do
 	{

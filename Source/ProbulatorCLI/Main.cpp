@@ -257,6 +257,8 @@ static void enableExperimentsBySuffix(ExperimentList& list, u32 suffixCount, cha
 	}
 }
 
+#include <Probulator/ExperimentSG.h>
+
 int main(int argc, char** argv)
 {
 	const ivec2 outputImageSize(256, 128);

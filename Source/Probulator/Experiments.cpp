@@ -80,6 +80,10 @@ void addAllExperiments(ExperimentList& experiments)
     addExperiment<ExperimentSGNNLS>(experiments, "Spherical Gaussians [Non-Negative Least Squares]", "SGNNLS")
         .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
         .setLobeCountAndLambda(lobeCount, lambda);
+    
+    addExperiment<ExperimentSGCustom>(experiments, "Spherical Gaussians [Running Average]", "SGRA")
+        .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
+        .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGGA>(experiments, "Spherical Gaussians [Genetic Algorithm]", "SGGA")
         .setPopulationAndGenerationCount(50, 2000)
