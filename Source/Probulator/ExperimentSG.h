@@ -15,12 +15,6 @@ public:
         return *this;
     }
 
-    ExperimentSGBase& setBrdfLambda(float brdfLambda)
-    {
-        m_brdfLambda = brdfLambda;
-        return *this;
-    }
-
     ExperimentSGBase& setAmbientLobeEnabled(bool state)
     {
         m_ambientLobeEnabled = state;
@@ -41,13 +35,11 @@ public:
 		outProperties.push_back(Property("Lobe count", reinterpret_cast<int*>(&m_lobeCount)));
 		outProperties.push_back(Property("Ambient lobe enabled", &m_ambientLobeEnabled));
 		outProperties.push_back(Property("Lambda", &m_lambda));
-		outProperties.push_back(Property("BRDF Lambda", &m_brdfLambda));
 	}
 
     bool m_ambientLobeEnabled = false;
     u32 m_lobeCount = 1;
     float m_lambda = 0.0f;
-    float m_brdfLambda = 0.0f;
     SgBasis m_lobes;
     
     void generateLobes()
@@ -92,15 +84,12 @@ protected:
 
     void generateIrradianceImage(const SharedData& data)
     {
-        SphericalGaussian brdf;
-        brdf.lambda = m_brdfLambda;
-        brdf.mu = vec3(sgFindMu(brdf.lambda, pi));
-
+        
         m_irradianceImage = Image(data.m_outputSize);
         m_irradianceImage.forPixels2D([&](vec4& pixel, ivec2 pixelPos)
         {
-            brdf.p = data.m_directionImage.at(pixelPos);
-            vec3 sampleSg = sgBasisDot(m_lobes, brdf) / pi;
+            vec3 normal = data.m_directionImage.at(pixelPos);
+            vec3 sampleSg = sgBasisIrradianceFitted(m_lobes, normal);
             pixel = vec4(sampleSg, 1.0f);
         });
     }
@@ -132,116 +121,48 @@ class ExperimentSGCustom : public ExperimentSGBase
 {
 public:
     
-//    void solveForRadiance(const std::vector<RadianceSample>& radianceSamples) override
-//    {
-//        const u32 lobeCount = (u32)m_lobes.size();
-//
-//        float lobeWeights[lobeCount];
-//
-//        for (const RadianceSample& sample : radianceSamples)
-//        {
-//            float sampleLobeWeights[lobeCount];
-//            float sampleLobeWeightSum = 0.f;
-//            for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
-//            {
-//                float dotProduct = dot(m_lobes[lobeIt].p, sample.direction);
-//                float weight = exp(m_lobes[lobeIt].lambda * (dotProduct - 1.0));
-//
-//                sampleLobeWeights[lobeIt] = weight;
-//                sampleLobeWeightSum += weight;
-//            }
-//
-//            for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
-//            {
-//                float weight = sampleLobeWeights[lobeIt] / sampleLobeWeightSum;
-//                if (weight == 0.f) { continue; }
-//
-//                const SphericalGaussian& lobe = m_lobes[lobeIt];
-//                float dotProduct = dot(lobe.p, sample.direction);
-//                float denom = exp(lobe.lambda * (dotProduct - 1.0));
-//
-//                lobeWeights[lobeIt] += weight;
-//
-//                vec3 currentValue = sgBasisEvaluate(m_lobes, sample.direction);
-//
-//                // Given the current value in the sample's direction for this lobe?
-//                vec3 currentLobeValue = sgEvaluate(lobe, sample.direction);
-//
-//                // What's the value for all of the other lobes?
-//                vec3 otherLobesValue = currentValue - currentLobeValue;
-//
-//                // What's the difference between the target value and the value for all of the other lobes?
-//                vec3 currentLobeDelta = sample.value - otherLobesValue;
-//
-//                // What's the μ that gets us to that delta?
-//                vec3 delta = currentLobeDelta - lobe.mu * denom;
-//                float weightScale = weight / lobeWeights[lobeIt];
-//
-//                // And then compute how much this lobe needs to change to compensate
-//                m_lobes[lobeIt].mu += delta * weightScale;
-//            }
-//        }
-//    }
-    
     void solveForRadiance(const std::vector<RadianceSample>& radianceSamples) override
     {
         const u32 lobeCount = (u32)m_lobes.size();
-        
+
         float lobeWeights[lobeCount];
+        
         for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
         {
             lobeWeights[lobeIt] = 0.f;
         }
-        
+
         for (const RadianceSample& sample : radianceSamples)
         {
+            // What's the value for all of the other lobes?
+            vec3 currentValue = vec3(0.f);
+            
             float sampleLobeWeights[lobeCount];
+            float sampleLobeWeightSum = 0.f;
             for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
             {
                 float dotProduct = dot(m_lobes[lobeIt].p, sample.direction);
                 float weight = exp(m_lobes[lobeIt].lambda * (dotProduct - 1.0));
-//                weight = sqrtf(weight);
-                weight = (1.f + 4.f / lobeCount) * weight;
+                currentValue += m_lobes[lobeIt].mu * weight;
+                
                 sampleLobeWeights[lobeIt] = weight;
+                sampleLobeWeightSum += weight;
             }
             
-            float sampleLobeWeightSum = 0.f;
+            // What's the μ that gets us to that delta?
+            vec3 deltaValue = sample.value - currentValue;
+
             for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
             {
-                sampleLobeWeightSum += sampleLobeWeights[lobeIt];
-            }
-            
-            vec3 currentValue = sgBasisEvaluate(m_lobes, sample.direction);
-            
-            for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
-            {
-                float weight = sampleLobeWeights[lobeIt]; // / sampleLobeWeightSum;
+                float weight = sampleLobeWeights[lobeIt] / sampleLobeWeightSum;
                 if (weight == 0.f) { continue; }
-                
-                const SphericalGaussian& lobe = m_lobes[lobeIt];
-                float dotProduct = dot(lobe.p, sample.direction);
-//                dotProduct = copysign(sqrt(fabs(dotProduct)), dotProduct);
-                float denom = exp(lobe.lambda * (dotProduct - 1.0));
-                denom = sqrt(denom);
-                
-                // Given the current value in the sample's direction for this lobe?
-                vec3 currentLobeValue = weight * currentValue; // sgEvaluate(lobe, sample.direction);
-                
-                // What's the value for all of the other lobes?
-                vec3 otherLobesValue = currentValue - currentLobeValue;
-                
-                // What's the difference between the target value and the value for all of the other lobes?
-                vec3 currentLobeDelta = sample.value - otherLobesValue;
-                
-                // What's the μ that gets us to that delta?
-                vec3 delta = currentLobeDelta - lobe.mu * denom;
-                
+
                 lobeWeights[lobeIt] += weight;
+
                 float weightScale = weight / lobeWeights[lobeIt];
-                
+
                 // And then compute how much this lobe needs to change to compensate
-                m_lobes[lobeIt].mu += delta * weightScale;
-//                m_lobes[lobeIt].mu = abs(m_lobes[lobeIt].mu);
+                m_lobes[lobeIt].mu += deltaValue * weightScale;
             }
         }
     }

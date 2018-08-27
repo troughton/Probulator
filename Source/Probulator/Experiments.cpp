@@ -65,29 +65,23 @@ void addAllExperiments(ExperimentList& experiments)
 		.setEnabled(false);
 
     addExperiment<ExperimentSGNaive>(experiments, "Spherical Gaussians [Naive]", "SG")
-        .setBrdfLambda(8.5f) // Chosen arbitrarily through experimentation
         .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGLS>(experiments, "Spherical Gaussians [Least Squares]", "SGLS")
-        .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
         .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGLS>(experiments, "Spherical Gaussians [Least Squares + Ambient]", "SGLSA")
-        .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
         .setAmbientLobeEnabled(true)
         .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGNNLS>(experiments, "Spherical Gaussians [Non-Negative Least Squares]", "SGNNLS")
-        .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
         .setLobeCountAndLambda(lobeCount, lambda);
     
     addExperiment<ExperimentSGCustom>(experiments, "Spherical Gaussians [Running Average]", "SGRA")
-        .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
         .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGGA>(experiments, "Spherical Gaussians [Genetic Algorithm]", "SGGA")
         .setPopulationAndGenerationCount(50, 2000)
-        .setBrdfLambda(3.0f) // Chosen arbitrarily through experimentation
         .setLobeCountAndLambda(lobeCount, lambda)
         .setEnabled(false); // disabled by default, as it requires *very* long time to converge
 }

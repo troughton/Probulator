@@ -44,4 +44,6 @@ namespace Probulator
 	// Find SG mu for a given lambda to match total energy of another SG
 	float sgFindMu(float targetLambda, float lambda, float mu);
 
+    // Compute the irradiance in a given direction using a curve fit.
+    vec3 sgIrradianceFitted(const SphericalGaussian& lightingLobe, const vec3& normal);
 }
