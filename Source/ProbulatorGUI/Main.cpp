@@ -15,7 +15,8 @@
 #include <GL/gl3w.h>
 #include <GLFW/glfw3.h>
 #include <imgui.h>
-#include <imgui_impl_glfw_gl3.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <nfd.h>
 
 #include <stdio.h>
@@ -124,7 +125,7 @@ public:
 			ImGuiWindowFlags_NoCollapse |
 			ImGuiWindowFlags_NoTitleBar);
 
-		if (ImGui::CollapsingHeader("Mode", nullptr, true, true))
+		if (ImGui::CollapsingHeader("Mode", nullptr, ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::PushItemWidth(-1.0f);
 			int currentExperiment = m_currentExperiment;
@@ -172,7 +173,7 @@ public:
 			}
 		}
 
-		if (ImGui::CollapsingHeader("Environment", nullptr, true, false))
+		if (ImGui::CollapsingHeader("Environment"))
 		{
 			ImGui::Text("File:");
 			ImGui::SameLine();
@@ -197,7 +198,7 @@ public:
 			ImGui::Image(getImTextureID(m_irradianceTexture), vec2(m_menuWidth, m_menuWidth / 2));
 		}
 
-		if (ImGui::CollapsingHeader("Object", nullptr, true, false))
+		if (ImGui::CollapsingHeader("Object"))
 		{
 			ImGui::Text("File:");
 			ImGui::SameLine();
@@ -220,7 +221,7 @@ public:
 			ImGui::Combo("Render Type", &m_renderType, renderTypeStrs, sz);
 		}
 
-		if (ImGui::CollapsingHeader("Camera", nullptr, true, false))
+		if (ImGui::CollapsingHeader("Camera"))
 		{
 			for (int i = 0; i < CameraModeCount; ++i)
 			{
@@ -444,14 +445,14 @@ public:
 
 		// setup constants
 
-		m_sceneViewport.x = m_windowSize.x - m_menuWidth;
-		m_sceneViewport.y = m_windowSize.y;
+		m_sceneViewport.x = (m_windowSize.x - m_menuWidth) * m_drawableScale;
+		m_sceneViewport.y = (m_windowSize.y) * m_drawableScale;
 
 		m_camera.m_aspect = (float)m_sceneViewport.x / (float)m_sceneViewport.y;
 		m_smoothCamera.m_aspect = m_camera.m_aspect;
 
-		m_shaderUniforms.resolution.x = (float)m_windowSize.x;
-		m_shaderUniforms.resolution.y = (float)m_windowSize.y;
+        m_shaderUniforms.resolution.x = (float)m_windowSize.x * m_drawableScale;
+		m_shaderUniforms.resolution.y = (float)m_windowSize.y * m_drawableScale;
 
 		m_shaderUniforms.viewMatrix = m_smoothCamera.getViewMatrix();
 		m_shaderUniforms.projMatrix = m_smoothCamera.getProjectionMatrix();
@@ -491,12 +492,13 @@ public:
 
 		// draw UI on top
 
-		ImGui::Render();
+        ImGui::Render();
 	}
 
-	void setWindowSize(ivec2 size)
+	void setWindowSize(ivec2 size, float scale)
 	{
 		m_windowSize = size;
+        m_drawableScale = scale;
 	}
 
 	void loadResources()
@@ -617,6 +619,7 @@ public:
 	std::string m_objectFilename = "Data/Models/bunny.obj";
 	std::string m_envmapFilename = "Data/Probes/wells.hdr";
 	ivec2 m_windowSize = ivec2(1280, 720);
+    float m_drawableScale = 1.0;
 	ivec2 m_sceneViewport = ivec2(1, 1);
 	int m_menuWidth = 660;
 	Image m_radianceImage;
@@ -663,13 +666,15 @@ public:
 static void cbWindowSize(GLFWwindow* window, int w, int h)
 {
 	ProbulatorGui* app = (ProbulatorGui*)glfwGetWindowUserPointer(window);
-	app->setWindowSize(ivec2(w, h));
+    int drawableWidth, drawableHeight;
+    glfwGetFramebufferSize(window, &drawableWidth, &drawableHeight);
+	app->setWindowSize(ivec2(w, h), (float)drawableWidth / (float)w);
 }
 
 static void cbMouseButton(GLFWwindow* window, int button, int action, int mods)
 {
 	ProbulatorGui* app = (ProbulatorGui*)glfwGetWindowUserPointer(window);
-	ImGui_ImplGlfwGL3_MouseButtonCallback(window, button, action, mods);
+	ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 	if (!ImGui::GetIO().WantCaptureMouse)
 	{
 		app->onMouseButton(button, action, mods);
@@ -678,7 +683,7 @@ static void cbMouseButton(GLFWwindow* window, int button, int action, int mods)
 
 static void cbScroll(GLFWwindow* window, double xoffset, double yoffset)
 {
-	ImGui_ImplGlfwGL3_ScrollCallback(window, xoffset, yoffset);
+	ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
 
 	if (!ImGui::GetIO().WantCaptureMouse)
 	{
@@ -699,7 +704,7 @@ static void cbCursorPos(GLFWwindow* window, double x, double y)
 static void cbKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	ProbulatorGui* app = (ProbulatorGui*)glfwGetWindowUserPointer(window);
-	ImGui_ImplGlfwGL3_KeyCallback(window, key, scancode, action, mods);
+	ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 
 	if (!ImGui::GetIO().WantCaptureKeyboard)
 	{
@@ -709,7 +714,7 @@ static void cbKey(GLFWwindow* window, int key, int scancode, int action, int mod
 
 static void cbChar(GLFWwindow* window, unsigned int c)
 {
-	ImGui_ImplGlfwGL3_CharCallback(window, c);
+	ImGui_ImplGlfw_CharCallback(window, c);
 
 	if (!ImGui::GetIO().WantCaptureKeyboard)
 	{
@@ -718,69 +723,100 @@ static void cbChar(GLFWwindow* window, unsigned int c)
 	}
 }
 
+static void glfw_error_callback(int error, const char* description)
+{
+    fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+}
+
 int main(int argc, char** argv)
 {
-	printf("Probulator starting ...\n");
+    printf("Probulator starting ...\n");
 
-	glfwInit();
+    // Setup window
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        return 1;
 
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // Decide GL+GLSL versions
+#if __APPLE__
+    // GL 3.2 + GLSL 150
+    const char* glsl_version = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+#else
+    // GL 3.0 + GLSL 130
+    const char* glsl_version = "#version 130";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+#endif
 
-	const ivec2 defaultWindowSize = ivec2(1280, 720);
-	GLFWwindow * window = glfwCreateWindow(
-		defaultWindowSize.x, defaultWindowSize.y,
-		"Probulator", nullptr, nullptr);
+    const ivec2 defaultWindowSize = ivec2(1280, 720);
+    GLFWwindow * window = glfwCreateWindow(
+        defaultWindowSize.x, defaultWindowSize.y,
+        "Probulator", nullptr, nullptr);
 
-	glfwMakeContextCurrent(window);
+    glfwMakeContextCurrent(window);
 
-	if (gl3wInit())
-	{
-		printf("ERROR: failed to initialize OpenGL\n");
-		return 1;
-	}
+    if (gl3wInit())
+    {
+        printf("ERROR: failed to initialize OpenGL\n");
+        return 1;
+    }
 
-	if (!gl3wIsSupported(3, 2))
-	{
-		printf("ERROR: OpenGL 3.2 is not supported\n");
-		return 1;
-	}
+    if (!gl3wIsSupported(3, 2))
+    {
+        printf("ERROR: OpenGL 3.2 is not supported\n");
+        return 1;
+    }
 
-	ImGui_ImplGlfwGL3_Init(window, true);
-	ImGui::GetStyle().WindowRounding = 0.0f;
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
 
-	ProbulatorGui* app = new ProbulatorGui();
-	app->setWindowSize(defaultWindowSize);
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init(glsl_version);
 
-	glfwSetWindowUserPointer(window, app);
-	glfwSetWindowSizeCallback(window, cbWindowSize);
+    ImGui::GetStyle().WindowRounding = 0.0f;
 
-	glfwSetMouseButtonCallback(window, cbMouseButton);
-	glfwSetScrollCallback(window, cbScroll);
-	glfwSetKeyCallback(window, cbKey);
-	glfwSetCharCallback(window, cbChar);
-	glfwSetCursorPosCallback(window, cbCursorPos);
+    ProbulatorGui* app = new ProbulatorGui();
+    app->setWindowSize(defaultWindowSize, 2.f);
 
-    glfwSwapInterval(0); // vsync ON
+    glfwSetWindowUserPointer(window, app);
+    glfwSetWindowSizeCallback(window, cbWindowSize);
 
-	do
-	{
-		ImGui_ImplGlfwGL3_NewFrame();
+    glfwSetMouseButtonCallback(window, cbMouseButton);
+    glfwSetScrollCallback(window, cbScroll);
+    glfwSetKeyCallback(window, cbKey);
+    glfwSetCharCallback(window, cbChar);
+    glfwSetCursorPosCallback(window, cbCursorPos);
 
-		app->update(window);
-		app->render();
+    glfwSwapInterval(1); // vsync ON
 
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-	} while(!glfwWindowShouldClose(window));
+    do
+    {
+        glfwPollEvents();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-	delete app;
+        app->update(window);
+        app->render();
 
-	ImGui_ImplGlfwGL3_Shutdown();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-	glfwTerminate();
+        glfwSwapBuffers(window);
+    } while(!glfwWindowShouldClose(window));
 
-	return 0;
+    delete app;
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwTerminate();
+
+    return 0;
 }
