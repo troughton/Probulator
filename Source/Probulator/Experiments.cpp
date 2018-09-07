@@ -77,7 +77,14 @@ void addAllExperiments(ExperimentList& experiments)
     addExperiment<ExperimentSGNNLS>(experiments, "Spherical Gaussians [Non-Negative Least Squares]", "SGNNLS")
         .setLobeCountAndLambda(lobeCount, lambda);
     
-    addExperiment<ExperimentSGCustom>(experiments, "Spherical Gaussians [Running Average]", "SGRA")
+    addExperiment<ExperimentSGRunningAverage>(experiments, "Spherical Gaussians [Running Average]", "SGRA")
+        .setLobeCountAndLambda(lobeCount, lambda);
+    
+    addExperiment<ExperimentSGRunningAverage>(experiments, "Spherical Gaussians [Non-Negative Running Average]", "SGNNRA")
+        .setLobeCountAndLambda(lobeCount, lambda)
+        .setNonNegativeSolve(true);
+    
+    addExperiment<ExperimentSGBakingLab>(experiments, "Spherical Gaussians [Baking Lab]", "SGBL")
         .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGGA>(experiments, "Spherical Gaussians [Genetic Algorithm]", "SGGA")
