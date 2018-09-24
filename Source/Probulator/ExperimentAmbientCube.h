@@ -24,8 +24,15 @@ public:
 			return result;
 		}
 	};
+    
+    enum class SolveType : int {
+        LeastSquares,
+        RunningAverage,
+        Projection
+    };
 
 	static AmbientCube solveAmbientCubeLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance);
+    static AmbientCube solveAmbientCubeRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance);
 	static AmbientCube solveAmbientCubeProjection(const Image& irradiance);
 
 	void run(SharedData& data) override;
@@ -33,16 +40,16 @@ public:
 	void getProperties(std::vector<Property>& outProperties) override
 	{
 		Experiment::getProperties(outProperties);
-		outProperties.push_back(Property("Use projection", reinterpret_cast<int*>(&m_projectionEnabled)));
+		outProperties.push_back(Property("Solve Type", reinterpret_cast<int*>(&m_solveType)));
 	}
 
-	ExperimentAmbientCube& setProjectionEnabled(bool state)
+	ExperimentAmbientCube& setSolveType(SolveType solveType)
     {
-        m_projectionEnabled = state;
+        m_solveType = solveType;
         return *this;
     }
 
-	bool m_projectionEnabled = false;
+    SolveType m_solveType = SolveType::LeastSquares;
 };
 
 }

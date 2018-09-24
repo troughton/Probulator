@@ -39,11 +39,15 @@ void addAllExperiments(ExperimentList& experiments)
         .setEnabled(false); // disabled by default, since MCIS mode is superior
 
 	addExperiment<ExperimentAmbientCube>(experiments, "Ambient Cube [Non-Negative Least Squares]", "AC")
-		.setProjectionEnabled(false)
+        .setSolveType(ExperimentAmbientCube::SolveType::LeastSquares)
 		.setInput(experimentMCIS);
 
+    addExperiment<ExperimentAmbientCube>(experiments, "Ambient Cube [Running Average]", "ACRA")
+        .setSolveType(ExperimentAmbientCube::SolveType::RunningAverage)
+        .setInput(experimentMCIS);
+    
 	addExperiment<ExperimentAmbientCube>(experiments, "Ambient Cube [Projection]", "ACPROJ")
-		.setProjectionEnabled(true)
+		.setSolveType(ExperimentAmbientCube::SolveType::Projection)
 		.setInput(experimentMCIS);
 
     addExperiment<ExperimentSHL1Geomerics>(experiments, "Spherical Harmonics L1 [Geomerics]", "SHL1G");

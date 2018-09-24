@@ -78,6 +78,55 @@ ExperimentAmbientCube::AmbientCube ExperimentAmbientCube::solveAmbientCubeLeastS
 
 	return ambientCube;
 }
+    
+ExperimentAmbientCube::AmbientCube ExperimentAmbientCube::solveAmbientCubeRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance)
+{
+    AmbientCube ambientCube;
+    float cubeWeights[6] = { 0 };
+    
+    const u64 sampleCount = directions.getPixelCount();
+    
+    std::vector<u64> sampleIndices;
+    sampleIndices.resize(sampleCount);
+    std::iota(sampleIndices.begin(), sampleIndices.end(), 0);
+    
+    std::random_shuffle(sampleIndices.begin(), sampleIndices.end());
+    
+    for (u64 _sampleIt = 0; _sampleIt < sampleCount; ++_sampleIt)
+    {
+        u64 sampleIt = sampleIndices[_sampleIt];
+        
+        const vec3& direction = directions.at(sampleIt);
+        
+        // What's the current value in the sample's direction?
+        vec3 currentValue = ambientCube.evaluate(direction);
+        vec4 targetValue = irradiance.at(sampleIt);
+        
+        vec3 delta = vec3(targetValue.x, targetValue.y, targetValue.z) - currentValue;
+        
+        vec3 dirSquared = direction * direction;
+        
+        for (u64 i = 0; i < 3; i += 1) {
+            u64 index = direction[i] < 0 ? (2 * i) : (2 * i + 1);
+            
+            float weight = dirSquared[i];
+            if (weight == 0.f) {
+                continue;
+            }
+            
+            cubeWeights[index] += weight;
+           
+            float weightScale = weight / cubeWeights[index];
+            ambientCube.irradiance[index] += delta * weightScale;
+            
+            if (true /* nonNegative */) {
+                ambientCube.irradiance[index] = max(ambientCube.irradiance[index], vec3(0.f));
+            }
+        }
+    }
+    
+    return ambientCube;
+}
 
 ExperimentAmbientCube::AmbientCube ExperimentAmbientCube::solveAmbientCubeProjection(const Image& irradiance)
 {
@@ -106,14 +155,17 @@ void ExperimentAmbientCube::run(SharedData& data)
 {
 	AmbientCube ambientCube;
 
-	if (m_projectionEnabled)
-	{
-		ambientCube = solveAmbientCubeProjection(m_input->m_irradianceImage);
-	}
-	else
-	{
-		ambientCube = solveAmbientCubeLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
-	}
+    switch (m_solveType) {
+        case SolveType::Projection:
+            ambientCube = solveAmbientCubeProjection(m_input->m_irradianceImage);
+            break;
+        case SolveType::LeastSquares:
+            ambientCube = solveAmbientCubeLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
+            break;
+        case SolveType::RunningAverage:
+            ambientCube = solveAmbientCubeRunningAverage(data.m_directionImage, m_input->m_irradianceImage);
+            break;
+    }
 
 	m_radianceImage = Image(data.m_outputSize);
 	m_irradianceImage = Image(data.m_outputSize);
