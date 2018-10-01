@@ -11,6 +11,14 @@ namespace Probulator
 		vec3 p; // lobe axis
 		float lambda; // sharpness
 		vec3 mu; // amplitude
+        
+        inline float weight(const vec3 &direction) const {
+            return exp(lambda * (dot(direction, p) - 1.f));
+        }
+        
+        inline vec3 evaluate(const vec3 &direction) const {
+            return mu * this->weight(direction);
+        }
 	};
 
 	// Calculates an integral of a product of two SGs over a sphere

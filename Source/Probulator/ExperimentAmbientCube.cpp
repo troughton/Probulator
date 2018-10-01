@@ -79,6 +79,13 @@ ExperimentAmbientCube::AmbientCube ExperimentAmbientCube::solveAmbientCubeLeastS
 	return ambientCube;
 }
     
+    inline float RandomFloat(float a, float b) {
+        float random = ((float) rand()) / (float) RAND_MAX;
+        float diff = b - a;
+        float r = random * diff;
+        return a + r;
+    }
+    
 ExperimentAmbientCube::AmbientCube ExperimentAmbientCube::solveAmbientCubeRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance)
 {
     AmbientCube ambientCube;
@@ -92,10 +99,8 @@ ExperimentAmbientCube::AmbientCube ExperimentAmbientCube::solveAmbientCubeRunnin
     
     std::random_shuffle(sampleIndices.begin(), sampleIndices.end());
     
-    for (u64 _sampleIt = 0; _sampleIt < sampleCount; ++_sampleIt)
+    for (u64 sampleIt : sampleIndices)
     {
-        u64 sampleIt = sampleIndices[_sampleIt];
-        
         const vec3& direction = directions.at(sampleIt);
         
         // What's the current value in the sample's direction?

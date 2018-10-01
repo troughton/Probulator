@@ -5,6 +5,7 @@
 #include <Probulator/ExperimentSG.h>
 #include <Probulator/ExperimentHBasis.h>
 #include <Probulator/ExperimentAmbientCube.h>
+#include <Probulator/ExperimentAmbientDice.h>
 
 namespace Probulator
 {
@@ -49,6 +50,9 @@ void addAllExperiments(ExperimentList& experiments)
 	addExperiment<ExperimentAmbientCube>(experiments, "Ambient Cube [Projection]", "ACPROJ")
 		.setSolveType(ExperimentAmbientCube::SolveType::Projection)
 		.setInput(experimentMCIS);
+    
+//    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice [Linear Running Average]", "ADRA")
+//        .setInput(experimentMCIS);
 
     addExperiment<ExperimentSHL1Geomerics>(experiments, "Spherical Harmonics L1 [Geomerics]", "SHL1G");
 
@@ -79,6 +83,9 @@ void addAllExperiments(ExperimentList& experiments)
         .setLobeCountAndLambda(lobeCount, lambda);
 
     addExperiment<ExperimentSGNNLS>(experiments, "Spherical Gaussians [Non-Negative Least Squares]", "SGNNLS")
+        .setLobeCountAndLambda(lobeCount, lambda);
+
+    addExperiment<ExperimentSGRunningAverageOld>(experiments, "Spherical Gaussians [Old Running Average]", "SGRAO")
         .setLobeCountAndLambda(lobeCount, lambda);
     
     addExperiment<ExperimentSGRunningAverage>(experiments, "Spherical Gaussians [Running Average]", "SGRA")

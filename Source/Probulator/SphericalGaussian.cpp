@@ -54,6 +54,9 @@ namespace Probulator
     // Stephen Hill [2016], https://mynameismjp.wordpress.com/2016/10/09/sg-series-part-3-diffuse-lighting-from-an-sg-light-source/
     vec3 sgIrradianceFitted(const SphericalGaussian& lightingLobe, const vec3& normal)
     {
+        if(lightingLobe.lambda == 0.f)
+            return lightingLobe.mu;
+        
         const float muDotN = dot(lightingLobe.p, normal);
         const float lambda = lightingLobe.lambda;
         

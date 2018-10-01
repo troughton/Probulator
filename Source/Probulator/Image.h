@@ -132,6 +132,7 @@ namespace Probulator
 		{}
 
 		vec4 sampleNearest(vec2 uv) const;
+        vec4 sampleBilinear(vec2 uv) const;
 
 		float* data() { return m_pixels.empty() ? nullptr : &m_pixels[0].x; }
 		const float* data() const { return m_pixels.empty() ? nullptr : &m_pixels[0].x; }

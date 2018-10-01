@@ -60,14 +60,15 @@ public:
 
         void generateSamples(u32 sampleCount, Image& image, std::vector<RadianceSample>& samples)
         {
+            std::mt19937 rng(13123);
+            
             samples.reserve(sampleCount);
             for (u32 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
             {
-                vec2 sampleUv = sampleHammersley(sampleIt, sampleCount);
+                vec2 sampleUv = vec2(sampleHalton(sampleIt + 1, 2), sampleHalton(sampleIt + 1, 3));
                 vec3 direction = m_basis * sampleUniformSphere(sampleUv);
 
                 vec3 sample = (vec3)image.sampleNearest(cartesianToLatLongTexcoord(direction));
-
                 samples.push_back({ direction, sample });
             }
         }
