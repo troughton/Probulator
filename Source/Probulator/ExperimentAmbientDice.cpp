@@ -53,6 +53,51 @@ namespace Probulator {
         vec3(0.0, -1.0, 0.0)
     };
     
+    const u32 AmbientDice::triangleIndices[20][3] = {
+        { 0, 4, 8 },
+        { 1, 4, 9 },
+        { 2, 5, 8 },
+        { 3, 5, 9 },
+        { 0, 6, 10 },
+        { 1, 6, 11 },
+        { 2, 7, 10 },
+        { 3, 7, 11 },
+        { 4, 8, 9 },
+        { 5, 8, 9 },
+        { 6, 10, 11 },
+        { 7, 10, 11 },
+        { 0, 2, 8 },
+        { 1, 3, 9 },
+        { 0, 2, 10 },
+        { 1, 3, 11 },
+        { 0, 4, 6 },
+        { 1, 4, 6 },
+        { 2, 5, 7 },
+        { 3, 5, 7 },
+    };
+    const vec3 AmbientDice::triangleBarycentricNormals[20][3] = {
+        { vec3(0.809017, 0.309017, -0.5), vec3(-0.5, 0.809017, 0.309017), vec3(0.309017, -0.5, 0.809017) },
+        { vec3(-0.809017, 0.309017, -0.5), vec3(0.5, 0.809017, 0.309017), vec3(-0.309017, -0.5, 0.809017) },
+        { vec3(0.809017, -0.309017, -0.5), vec3(-0.5, -0.809017, 0.309017), vec3(0.309017, 0.5, 0.809017) },
+        { vec3(-0.809017, -0.309017, -0.5), vec3(0.5, -0.809017, 0.309017), vec3(-0.309017, 0.5, 0.809017) },
+        { vec3(0.809017, 0.309017, 0.5), vec3(-0.5, 0.809017, -0.309017), vec3(0.309017, -0.5, -0.809017) },
+        { vec3(-0.809017, 0.309017, 0.5), vec3(0.5, 0.809017, -0.309017), vec3(-0.309017, -0.5, -0.809017) },
+        { vec3(0.809017, -0.309017, 0.5), vec3(-0.5, -0.809017, -0.309017), vec3(0.309017, 0.5, -0.809017) },
+        { vec3(-0.809017, -0.309017, 0.5), vec3(0.5, -0.809017, -0.309017), vec3(-0.309017, 0.5, -0.809017) },
+        { vec3(-0.0, 1.0, -0.0), vec3(0.809017, -0.309017, 0.5), vec3(-0.809017, -0.309017, 0.5) },
+        { vec3(0.0, -1.0, 0.0), vec3(0.809017, 0.309017, 0.5), vec3(-0.809017, 0.309017, 0.5) },
+        { vec3(0.0, 1.0, -0.0), vec3(0.809017, -0.309017, -0.5), vec3(-0.809017, -0.309017, -0.5) },
+        { vec3(-0.0, -1.0, 0.0), vec3(0.809017, 0.309017, -0.5), vec3(-0.809017, 0.309017, -0.5) },
+        { vec3(0.5, 0.809017, -0.309017), vec3(0.5, -0.809017, -0.309017), vec3(-0.0, -0.0, 1.0) },
+        { vec3(-0.5, 0.809017, -0.309017), vec3(-0.5, -0.809017, -0.309017), vec3(0.0, 0.0, 1.0) },
+        { vec3(0.5, 0.809017, 0.309017), vec3(0.5, -0.809017, 0.309017), vec3(0.0, 0.0, -1.0) },
+        { vec3(-0.5, 0.809017, 0.309017), vec3(-0.5, -0.809017, 0.309017), vec3(-0.0, -0.0, -1.0) },
+        { vec3(1.0, -0.0, -0.0), vec3(-0.309017, 0.5, 0.809017), vec3(-0.309017, 0.5, -0.809017) },
+        { vec3(-1.0, 0.0, 0.0), vec3(0.309017, 0.5, 0.809017), vec3(0.309017, 0.5, -0.809017) },
+        { vec3(1.0, 0.0, 0.0), vec3(-0.309017, -0.5, 0.809017), vec3(-0.309017, -0.5, -0.809017) },
+        { vec3(-1.0, -0.0, -0.0), vec3(0.309017, -0.5, 0.809017), vec3(0.309017, -0.5, -0.809017) },
+    };
+    
     
     vec3 AmbientDice::hybridCubicBezier(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2) const {
         const float alpha = 0.5 * sqrt(0.5 * (5.0 + sqrt(5.0)));
@@ -147,7 +192,6 @@ namespace Probulator {
         const float fValueFactor = -beta / alpha;
         const float fDerivativeFactor = 1.0 / (3.0 * alpha);
         
-        
         const float weightDenom = b1 * b2 + b0 * b2 + b0 * b1;
         
         float w0 = (b1 * b2) / weightDenom;
@@ -171,10 +215,6 @@ namespace Probulator {
         // https://en.wikipedia.org/wiki/Bézier_triangle
         // Notation: cxyz means alpha^x, beta^y, gamma^z.
         
-        const float b0_2 = b0 * b0;
-        const float b1_2 = b1 * b1;
-        const float b2_2 = b2 * b2;
-        
         float v0ValueWeight = 0.0;
         float v1ValueWeight = 0.0;
         float v2ValueWeight = 0.0;
@@ -186,6 +226,10 @@ namespace Probulator {
         float v0DVWeight = 0.0;
         float v1DVWeight = 0.0;
         float v2DVWeight = 0.0;
+        
+        const float b0_2 = b0 * b0;
+        const float b1_2 = b1 * b1;
+        const float b2_2 = b2 * b2;
         
         // Add c300, c030, and c003
         float c300Weight = b0_2 * b0;
@@ -254,11 +298,31 @@ namespace Probulator {
         v1ValueWeight += c030Weight;
         v2ValueWeight += c003Weight;
         
-        printf("Weights are %.3f, %.3f, %.3f\n", v0ValueWeight, v1ValueWeight, v2ValueWeight);
-        
         *w0Out = { v0ValueWeight, v0DUWeight, v0DVWeight };
         *w1Out = { v1ValueWeight, v1DUWeight, v1DVWeight };
         *w2Out = { v2ValueWeight, v2DUWeight, v2DVWeight };
+    }
+    
+    void AmbientDice::hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const {
+        
+        u32 triIndex = this->indexIcosahedronTriangle(direction);
+        u32 i0 = AmbientDice::triangleIndices[triIndex][0];
+        u32 i1 = AmbientDice::triangleIndices[triIndex][1];
+        u32 i2 = AmbientDice::triangleIndices[triIndex][2];
+        
+        vec3 n0 = AmbientDice::triangleBarycentricNormals[triIndex][0];
+        vec3 n1 = AmbientDice::triangleBarycentricNormals[triIndex][1];
+        vec3 n2 = AmbientDice::triangleBarycentricNormals[triIndex][2];
+        
+        float b0 = dot(direction, n0);
+        float b1 = dot(direction, n1);
+        float b2 = dot(direction, n2);
+        
+        this->hybridCubicBezierWeights(i0, i1, i2, b0, b1, b2, w0Out, w1Out, w2Out);
+        
+        *i0Out = i0;
+        *i1Out = i1;
+        *i2Out = i2;
     }
     
     AmbientDice ExperimentAmbientDice::solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance)
@@ -284,9 +348,10 @@ namespace Probulator {
             
             vec3 delta = vec3(targetValue.x, targetValue.y, targetValue.z) - currentValue;
             
-            
-            u32 i0, i1, i2;
-            ambientDice.indexIcosahedron(direction, &i0, &i1, &i2);
+            u32 triIndex = ambientDice.indexIcosahedronTriangle(direction);
+            u32 i0 = AmbientDice::triangleIndices[triIndex][0];
+            u32 i1 = AmbientDice::triangleIndices[triIndex][1];
+            u32 i2 = AmbientDice::triangleIndices[triIndex][2];
             
             const vec3& v0 = AmbientDice::vertexPositions[i0];
             const vec3& v1 = AmbientDice::vertexPositions[i1];
@@ -374,8 +439,10 @@ namespace Probulator {
         {
             const vec3& direction = directions.at(sampleIt);
             
-            u32 i0, i1, i2;
-            ambientDice.indexIcosahedron(direction, &i0, &i1, &i2);
+            u32 triIndex = ambientDice.indexIcosahedronTriangle(direction);
+            u32 i0 = AmbientDice::triangleIndices[triIndex][0];
+            u32 i1 = AmbientDice::triangleIndices[triIndex][1];
+            u32 i2 = AmbientDice::triangleIndices[triIndex][2];
             
             const vec3& v0 = AmbientDice::vertexPositions[i0];
             const vec3& v1 = AmbientDice::vertexPositions[i1];
@@ -446,9 +513,67 @@ namespace Probulator {
         return ambientDice;
     }
     
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance)
+    {
+        using namespace Eigen;
+        
+        AmbientDice ambientDice;
+        
+        const u64 sampleCount = directions.getPixelCount();
+        
+        MatrixXf A = MatrixXf::Zero(sampleCount, 36);
+        
+        for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+        {
+            const vec3& direction = directions.at(sampleIt);
+            
+            u32 i0, i1, i2;
+            AmbientDice::VertexWeights weights[3];
+            ambientDice.hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
+            
+            A(sampleIt, i0) = weights[0].value;
+            A(sampleIt, i0 + 12) = weights[0].directionalDerivativeU;
+            A(sampleIt, i0 + 24) = weights[0].directionalDerivativeV;
+            
+            A(sampleIt, i1) = weights[1].value;
+            A(sampleIt, i1 + 12) = weights[1].directionalDerivativeU;
+            A(sampleIt, i1 + 24) = weights[1].directionalDerivativeV;
+            
+            A(sampleIt, i2) = weights[2].value;
+            A(sampleIt, i2 + 12) = weights[2].directionalDerivativeU;
+            A(sampleIt, i2 + 24) = weights[2].directionalDerivativeV;
+            
+        }
+        
+        NNLS<MatrixXf> solver(A);
+        
+        VectorXf b;
+        b.resize(sampleCount);
+        
+        for (u32 channelIt = 0; channelIt < 3; ++channelIt)
+        {
+            for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+            {
+                b[sampleIt] = irradiance.at(sampleIt)[channelIt];
+            }
+            
+            solver.solve(b);
+            VectorXf x = solver.x();
+            
+            for (u64 basisIt = 0; basisIt < 12; ++basisIt)
+            {
+                ambientDice.vertices[basisIt].value[channelIt] = x[basisIt];
+                ambientDice.vertices[basisIt].directionalDerivativeU[channelIt] = x[basisIt + 12];
+                ambientDice.vertices[basisIt].directionalDerivativeV[channelIt] = x[basisIt + 24];
+            }
+        }
+        
+        return ambientDice;
+    }
+    
     void ExperimentAmbientDice::run(SharedData& data)
     {
-        AmbientDice ambientDice = solveAmbientDiceRunningAverageBezier(data.m_directionImage, m_input->m_irradianceImage);
+        AmbientDice ambientDice = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
 
         m_radianceImage = Image(data.m_outputSize);
         m_irradianceImage = Image(data.m_outputSize);
@@ -456,21 +581,7 @@ namespace Probulator {
         data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                           {
                                               vec3 sampleIrradianceH = ambientDice.evaluateBezier(direction);
-                                             
-                                        
                                               
-//                                              u32 triangleIndex = ambientDice.indexIcosahedronTriangle(direction);
-//
-//                                              vec3 colour;
-//                                              if (triangleIndex < 8) {
-//                                                  colour = vec3(float(triangleIndex) * 0.5f / 7.f + 0.5f);
-//                                              } else if (triangleIndex < 12) {
-//                                                  colour = vec3(float(triangleIndex - 8) / 4.f * 0.5f + 0.5f, 0.f, 0.f);
-//                                              } else if (triangleIndex < 16) {
-//                                                  colour = vec3(0.f, float(triangleIndex - 12) / 4.f * 0.5f + 0.5f, 0.f);
-//                                              } else{
-//                                                  colour = vec3(0.f, 0.f, float(triangleIndex - 16) / 4.f * 0.5f + 0.5f);
-//                                              }
                                               m_irradianceImage.at(pixelPos) = vec4(sampleIrradianceH, 1.0f);
                                               m_radianceImage.at(pixelPos) = vec4(0.0f);
                                           });

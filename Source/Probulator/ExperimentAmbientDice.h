@@ -13,6 +13,9 @@ namespace Probulator {
         static const vec3 tangents[12];
         static const vec3 bitangents[12];
         
+        static const u32 triangleIndices[20][3];
+        static const vec3 triangleBarycentricNormals[20][3];
+        
         struct Vertex {
             vec3 value;
             vec3 directionalDerivativeU;
@@ -55,14 +58,6 @@ namespace Probulator {
             *i0 = vertASelect ? indexA : indexAFlipped;
             *i1 = vertBSelect ? indexB : indexBFlipped;
             *i2 = vertCSelect ? indexC : indexCFlipped;
-            
-            if (*i1 == *i0) {
-                *i1 = vertBSelect ? indexBFlipped : indexB;
-            }
-            
-            if (*i2 == *i1) {
-                *i2 = vertCSelect ? indexCFlipped : indexC;
-            }
         }
         
         inline u32 indexIcosahedronTriangle(const vec3& direction) const
@@ -93,6 +88,7 @@ namespace Probulator {
         
         vec3 hybridCubicBezier(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2) const;
         void hybridCubicBezierWeights(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2) const;
+        void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const;
         
         inline vec3 evaluateLinear(const vec3& direction) const
         {
@@ -119,24 +115,8 @@ namespace Probulator {
         inline vec3 evaluateBezier(const vec3& direction) const
         {
             u32 i0, i1, i2;
-            this->indexIcosahedron(direction, &i0, &i1, &i2);
-            
-            const vec3& v0 = AmbientDice::vertexPositions[i0];
-            const vec3& v1 = AmbientDice::vertexPositions[i1];
-            const vec3& v2 = AmbientDice::vertexPositions[i2];
-            
-            vec3 n0 = normalize(cross(v1, v2));
-            vec3 n1 = normalize(cross(v0, v2));
-            vec3 n2 = normalize(cross(v0, v1));
-            
-            float b0 = dot(direction, n0) / dot(v0, n0);
-            float b1 = dot(direction, n1) / dot(v1, n1);
-            float b2 = dot(direction, n2) / dot(v2, n2);
-            
-            //            return hybridCubicBezier(i0, i1, i2, b0, b1, b2);
-            
             AmbientDice::VertexWeights weights[3];
-            this->hybridCubicBezierWeights(i0, i1, i2, b0, b1, b2, &weights[0], &weights[1], &weights[2]);
+            this->hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
             return
             weights[0].value * this->vertices[i0].value +
@@ -156,8 +136,9 @@ namespace Probulator {
     {
         public:
         
-        AmbientDice solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance);
-        AmbientDice solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance);
         
         void run(SharedData& data) override;
     };
