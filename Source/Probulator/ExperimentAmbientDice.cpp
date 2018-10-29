@@ -98,99 +98,240 @@ namespace Probulator {
         { vec3(-1.0, -0.0, -0.0), vec3(0.309017, -0.5, 0.809017), vec3(0.309017, -0.5, -0.809017) },
     };
     
+    inline void constructOrthonormalBasis(vec3 n, vec3 *b1, vec3 *b2) {
+        float sign = copysign(1.0f, n.z);
+        const float a = -1.0f / (sign + n.z);
+        const float b = n.x * n.y * a;
+        *b1 = vec3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
+        *b2 = vec3(b, sign + n.y * n.y * a, -n.y);
+    }
+    
+    // world space gradient retrieval
+    inline void getWsGradient(const AmbientDice &dice, int index, vec3 &gradR, vec3 &gradG, vec3 &gradB )
+    {
+        vec3 tangent = AmbientDice::tangents[index];
+        vec3 bitangent = AmbientDice::bitangents[index];
+        
+        gradR = tangent      * dice.vertices[index].directionalDerivativeU.r +
+        bitangent * dice.vertices[index].directionalDerivativeV.r;
+        
+        gradG = tangent      * dice.vertices[index].directionalDerivativeU.g +
+        bitangent * dice.vertices[index].directionalDerivativeV.g;
+        
+        gradB = tangent      * dice.vertices[index].directionalDerivativeU.b +
+        bitangent * dice.vertices[index].directionalDerivativeV.b;
+    }
+    
+    
+    // spherical barycentric coordinates
+    inline void getBaseWeightsSphericalInterpolation( const vec3& dir, const vec3& v0, const vec3& v1, const vec3& v2, float weight[3] )
+    {
+        vec3 e0 = normalize( cross( v1, v2 ) );
+        vec3 e1 = normalize( cross( v0, v2 ) );
+        vec3 e2 = normalize( cross( v0, v1 ) );
+        
+        float e0Mult = dot( e0, v0 ) < 0 ? -1.0f : 1.0f;
+        float e1Mult = dot( e1, v1 ) < 0 ? -1.0f : 1.0f;
+        float e2Mult = dot( e2, v2 ) < 0 ? -1.0f : 1.0f;
+        
+        e0 *= e0Mult;
+        e1 *= e1Mult;
+        e2 *= e2Mult;
+        
+        weight[0] = dot( dir, e0 ) / dot( v0, e0 );
+        weight[1] = dot( dir, e1 ) / dot( v1, e1 );
+        weight[2] = dot( dir, e2 ) / dot( v2, e2 );
+    }
+    
+    // actual interpolation
+    inline float HermiteInterpolateHybridBezier_Sphere_HalfHalf(const AmbientDice &dice, int i0, int i1, int i2, float bary0, float bary1, float bary2, float f0, float f1, float f2, const vec3 &f0grad, const vec3 &f1grad, const vec3 &f2grad)
+    {
+        float b_radial[3] = { bary1 * bary2,
+            bary2 * bary0,
+            bary0 * bary1 };
+        
+        float b_radial_sum_rcp = 1.0f / ( b_radial[0] + b_radial[1] + b_radial[2] );
+        
+        vec3 v0 = AmbientDice::vertexPositions[i0];
+        vec3 v1 = AmbientDice::vertexPositions[i1];
+        vec3 v2 = AmbientDice::vertexPositions[i2];
+        
+        vec3 edge0N = cross( v0, v1 );
+        vec3 edge1N = cross( v1, v2 );
+        vec3 edge2N = cross( v2, v0 );
+        
+        float b300 = f0;
+        float b030 = f1;
+        float b003 = f2;
+        
+        // spherical barycentric coordinages of a unit vector along p0->p1 at p0
+        static const float kUnitTangentVecBary0 = -0.425325f;
+        static const float kUnitTangentVecBary1 = 0.951057f;
+        
+        float b210 = max( 0.f, ( 1.0f / kUnitTangentVecBary1 ) * ( -kUnitTangentVecBary0 * f0 + ( 1.0f / 3.0f ) * dot( f0grad, normalize( cross( edge0N, v0 ) ) ) ) );
+        float b201 = max( 0.f, ( 1.0f / kUnitTangentVecBary1 ) * ( -kUnitTangentVecBary0 * f0 + ( 1.0f / 3.0f ) * dot( f0grad, normalize( -cross( edge2N, v0 ) ) ) ) );
+        float b120 = max( 0.f, ( 1.0f / kUnitTangentVecBary1 ) * ( -kUnitTangentVecBary0 * f1 + ( 1.0f / 3.0f ) * dot( f1grad, normalize( -cross( edge0N, v1 ) ) ) ) );
+        float b021 = max( 0.f, ( 1.0f / kUnitTangentVecBary1 ) * ( -kUnitTangentVecBary0 * f1 + ( 1.0f / 3.0f ) * dot( f1grad, normalize( cross( edge1N, v1 ) ) ) ) );
+        float b102 = max( 0.f, ( 1.0f / kUnitTangentVecBary1 ) * ( -kUnitTangentVecBary0 * f2 + ( 1.0f / 3.0f ) * dot( f2grad, normalize( cross( edge2N, v2 ) ) ) ) );
+        float b012 = max( 0.f, ( 1.0f / kUnitTangentVecBary1 ) * ( -kUnitTangentVecBary0 * f2 + ( 1.0f / 3.0f ) * dot( f2grad, normalize( -cross( edge1N, v2 ) ) ) ) );
+        
+        // voodoo that makes the derivatives on edges behave properly
+        float b111_0 = - 0.0690983f * b030 + 0.239919f * b021 + 0.239919f * b012 - 0.0690983f * b003 + 0.223607f * b120 + 0.223607f * b102;
+        float b111_1 = - 0.0690983f * b003 + 0.239919f * b102 + 0.239919f * b201 - 0.0690983f * b300 + 0.223607f * b012 + 0.223607f * b210;
+        float b111_2 = - 0.0690983f * b300 + 0.239919f * b210 + 0.239919f * b120 - 0.0690983f * b030 + 0.223607f * b201 + 0.223607f * b021;
+        
+        float b111 = b_radial[0] * b_radial_sum_rcp * b111_0 +
+        b_radial[1] * b_radial_sum_rcp * b111_1 +
+        b_radial[2] * b_radial_sum_rcp * b111_2 ;
+        
+        return b300 * bary0 * bary0 * bary0 +
+        b030 * bary1 * bary1 * bary1 +
+        b003 * bary2 * bary2 * bary2 +
+        b210 * bary0 * bary0 * bary1 * 3.0f +
+        b201 * bary0 * bary0 * bary2 * 3.0f +
+        b120 * bary0 * bary1 * bary1 * 3.0f +
+        b021 * bary1 * bary1 * bary2 * 3.0f +
+        b102 * bary0 * bary2 * bary2 * 3.0f +
+        b012 * bary1 * bary2 * bary2 * 3.0f +
+        b111 * bary0 * bary1 * bary2 * 6.0f;
+    }
     
     vec3 AmbientDice::hybridCubicBezier(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2) const {
-        const float alpha = 0.5 * sqrt(0.5 * (5.0 + sqrt(5.0)));
-        const float beta = -0.5 * sqrt(0.1 * (5.0 + sqrt(5.0)));
         
-        const float a0 = (sqrt(5.0) - 5.0) / 40.0;
-        const float a1 = (11.0 * sqrt(5.0) - 15.0) / 40.0;
-        const float a2 = sqrt(5.0) / 10.0;
+        vec3 i0gradR, i0gradG, i0gradB;
+        vec3 i1gradR, i1gradG, i1gradB;
+        vec3 i2gradR, i2gradG, i2gradB;
         
-        vec3 c300 = this->vertices[i0].value;
-        vec3 c030 = this->vertices[i1].value;
-        vec3 c003 = this->vertices[i2].value;
+        getWsGradient(*this, i0, i0gradR, i0gradG, i0gradB );
+        getWsGradient(*this, i1, i1gradR, i1gradG, i1gradB );
+        getWsGradient(*this, i2, i2gradR, i2gradG, i2gradB );
         
-        vec3 v0V1 = AmbientDice::vertexPositions[i1] - AmbientDice::vertexPositions[i0];
-        vec3 v0V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i0];
-        vec3 v1V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i1];
+        float R = HermiteInterpolateHybridBezier_Sphere_HalfHalf(*this, i0, i1, i2, b0, b1, b2, this->vertices[i0].value.r, this->vertices[i1].value.r, this->vertices[i2].value.r, i0gradR, i1gradR, i2gradR);
+        float G = HermiteInterpolateHybridBezier_Sphere_HalfHalf(*this, i0, i1, i2, b0, b1, b2, this->vertices[i0].value.g, this->vertices[i1].value.g, this->vertices[i2].value.g, i0gradG, i1gradG, i2gradG);
+        float B = HermiteInterpolateHybridBezier_Sphere_HalfHalf(*this, i0, i1, i2, b0, b1, b2, this->vertices[i0].value.b, this->vertices[i1].value.b, this->vertices[i2].value.b, i0gradB, i1gradB, i2gradB);
         
-        const float fValueFactor = -beta / alpha;
-        const float fDerivativeFactor = 1.0 / (3.0 * alpha);
-        
-        vec3 c210 = fValueFactor * this->vertices[i0].value +
-        fDerivativeFactor * (dot(v0V1, AmbientDice::tangents[i0]) * this->vertices[i0].directionalDerivativeU + dot(v0V1, AmbientDice::bitangents[i0]) * this->vertices[i0].directionalDerivativeV);
-        
-        vec3 c201 = fValueFactor * this->vertices[i0].value +
-        fDerivativeFactor * (dot(v0V2, AmbientDice::tangents[i0]) * this->vertices[i0].directionalDerivativeU + dot(v0V2, AmbientDice::bitangents[i0]) * this->vertices[i0].directionalDerivativeV);
-        
-        vec3 c120 = fValueFactor * this->vertices[i1].value +
-        fDerivativeFactor * (dot(-v0V1, AmbientDice::tangents[i1]) * this->vertices[i1].directionalDerivativeU + dot(-v0V1, AmbientDice::bitangents[i1]) * this->vertices[i1].directionalDerivativeV);
-        
-        vec3 c021 = fValueFactor * this->vertices[i1].value +
-        fDerivativeFactor * (dot(v1V2, AmbientDice::tangents[i1]) * this->vertices[i1].directionalDerivativeU + dot(v1V2, AmbientDice::bitangents[i1]) * this->vertices[i1].directionalDerivativeV);
-        
-        vec3 c102 = fValueFactor * this->vertices[i2].value +
-        fDerivativeFactor * (dot(-v0V2, AmbientDice::tangents[i2]) * this->vertices[i2].directionalDerivativeU + dot(-v0V2, AmbientDice::bitangents[i2]) * this->vertices[i2].directionalDerivativeV);
-        
-        vec3 c012 = fValueFactor * this->vertices[i2].value +
-        fDerivativeFactor * (dot(-v1V2, AmbientDice::tangents[i2]) * this->vertices[i2].directionalDerivativeU + dot(-v1V2, AmbientDice::bitangents[i2]) * this->vertices[i2].directionalDerivativeV);
+        return vec3( R, G, B );
         
         
-        vec3 c0_111 = a0 * c030 + a1 * c021 + a1 * c012 + a0 * c003 + a2 * c120 + a2 * c102;
-        vec3 c1_111 = a0 * c003 + a1 * c102 + a1 * c201 + a0 * c300 + a2 * c012 + a2 * c210;
-        vec3 c2_111 = a0 * c300 + a1 * c210 + a1 * c120 + a0 * c030 + a2 * c201 + a2 * c021;
-        
-        float weightDenom = b1 * b2 + b0 * b2 + b0 * b1;
-        
-        float w0 = (b1 * b2) / weightDenom;
-        float w1 = (b0 * b2) / weightDenom;
-        float w2 = (b0 * b1) / weightDenom;
-        
-        if (b0 == 1.0) {
-            w0 = 1.0;
-            w1 = 0.0;
-            w2 = 0.0;
-        } else if (b1 == 1.0) {
-            w0 = 0.0;
-            w1 = 1.0;
-            w2 = 0.0;
-        } else if (b2 == 1.0) {
-            w0 = 0.0;
-            w1 = 0.0;
-            w2 = 1.0;
-        }
-        
-        vec3 c111 = w0 * c0_111 + w1 * c1_111 + w2 * c2_111;
-        
-        // https://en.wikipedia.org/wiki/Bézier_triangle
-        // Notation: cxyz means alpha^x, beta^y, gamma^z.
-        
-        float b0_2 = b0 * b0;
-        float b1_2 = b1 * b1;
-        float b2_2 = b2 * b2;
-        
-        vec3 interpolated = b1_2 * b1 * c030 + 3.f * c120 * b0 * b1_2 + 3.f * c021 * b1_2 * b2 +
-        3.f * c210 * b0_2 * b1 + 6.f * c111 * b0 * b1 * b2 + 3.f * c012 * b1 * b2_2 +
-        b0_2 * b0 * c300 + 3.f * c201 * b0_2 * b2 + 3.f * c102 * b0 * b2_2 + c003 * b2_2 * b2;
-        
-        return interpolated;
+//        const float alpha = 0.5 * sqrt(0.5 * (5.0 + sqrt(5.0)));
+//        const float beta = -0.5 * sqrt(0.1 * (5.0 + sqrt(5.0)));
+//
+//        const float a0 = (sqrt(5.0) - 5.0) / 40.0;
+//        const float a1 = (11.0 * sqrt(5.0) - 15.0) / 40.0;
+//        const float a2 = sqrt(5.0) / 10.0;
+//
+//        vec3 c300 = this->vertices[i0].value;
+//        vec3 c030 = this->vertices[i1].value;
+//        vec3 c003 = this->vertices[i2].value;
+//
+//        vec3 v0V1 = AmbientDice::vertexPositions[i1] - AmbientDice::vertexPositions[i0];
+//        vec3 v0V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i0];
+//        vec3 v1V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i1];
+//
+//        const float fValueFactor = -beta / alpha;
+//        const float fDerivativeFactor = 1.0 / (3.0 * alpha);
+//
+//        vec3 c210 = fValueFactor * this->vertices[i0].value +
+//        fDerivativeFactor * (dot(v0V1, AmbientDice::tangents[i0]) * this->vertices[i0].directionalDerivativeU + dot(v0V1, AmbientDice::bitangents[i0]) * this->vertices[i0].directionalDerivativeV);
+//
+//        vec3 c201 = fValueFactor * this->vertices[i0].value +
+//        fDerivativeFactor * (dot(v0V2, AmbientDice::tangents[i0]) * this->vertices[i0].directionalDerivativeU + dot(v0V2, AmbientDice::bitangents[i0]) * this->vertices[i0].directionalDerivativeV);
+//
+//        vec3 c120 = fValueFactor * this->vertices[i1].value +
+//        fDerivativeFactor * (dot(-v0V1, AmbientDice::tangents[i1]) * this->vertices[i1].directionalDerivativeU + dot(-v0V1, AmbientDice::bitangents[i1]) * this->vertices[i1].directionalDerivativeV);
+//
+//        vec3 c021 = fValueFactor * this->vertices[i1].value +
+//        fDerivativeFactor * (dot(v1V2, AmbientDice::tangents[i1]) * this->vertices[i1].directionalDerivativeU + dot(v1V2, AmbientDice::bitangents[i1]) * this->vertices[i1].directionalDerivativeV);
+//
+//        vec3 c102 = fValueFactor * this->vertices[i2].value +
+//        fDerivativeFactor * (dot(-v0V2, AmbientDice::tangents[i2]) * this->vertices[i2].directionalDerivativeU + dot(-v0V2, AmbientDice::bitangents[i2]) * this->vertices[i2].directionalDerivativeV);
+//
+//        vec3 c012 = fValueFactor * this->vertices[i2].value +
+//        fDerivativeFactor * (dot(-v1V2, AmbientDice::tangents[i2]) * this->vertices[i2].directionalDerivativeU + dot(-v1V2, AmbientDice::bitangents[i2]) * this->vertices[i2].directionalDerivativeV);
+//
+//        vec3 c0_111 = a0 * c030 + a1 * c021 + a1 * c012 + a0 * c003 + a2 * c120 + a2 * c102;
+//        vec3 c1_111 = a0 * c003 + a1 * c102 + a1 * c201 + a0 * c300 + a2 * c012 + a2 * c210;
+//        vec3 c2_111 = a0 * c300 + a1 * c210 + a1 * c120 + a0 * c030 + a2 * c201 + a2 * c021;
+//
+//        float weightDenom = b1 * b2 + b0 * b2 + b0 * b1;
+//
+//        float w0 = (b1 * b2) / weightDenom;
+//        float w1 = (b0 * b2) / weightDenom;
+//        float w2 = (b0 * b1) / weightDenom;
+//
+//        if (b0 == 1.0) {
+//            w0 = 1.0;
+//            w1 = 0.0;
+//            w2 = 0.0;
+//        } else if (b1 == 1.0) {
+//            w0 = 0.0;
+//            w1 = 1.0;
+//            w2 = 0.0;
+//        } else if (b2 == 1.0) {
+//            w0 = 0.0;
+//            w1 = 0.0;
+//            w2 = 1.0;
+//        }
+//
+//        vec3 c111 = w0 * c0_111 + w1 * c1_111 + w2 * c2_111;
+//
+//        // https://en.wikipedia.org/wiki/Bézier_triangle
+//        // Notation: cxyz means alpha^x, beta^y, gamma^z.
+//
+//        float b0_2 = b0 * b0;
+//        float b1_2 = b1 * b1;
+//        float b2_2 = b2 * b2;
+//
+//        vec3 interpolated =
+//        c300 * b0_2 * b0 +
+//        c030 * b1_2 * b1 +
+//        c003 * b2_2 * b2 +
+//        c120 * 3.f * b0 * b1_2 +
+//        c021 * 3.f * b1_2 * b2 +
+//        c210 * 3.f * b0_2 * b1 +
+//        c012 * 3.f * b1 * b2_2 +
+//        c201 * 3.f * b0_2 * b2 +
+//        c102 * 3.f * b0 * b2_2 +
+//        c111 * 6.f * b0 * b1 * b2;
+//
+//        return interpolated;
     }
     
     void AmbientDice::hybridCubicBezierWeights(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const {
-        const float alpha = 0.5f * sqrt(0.5f * (5.0f + sqrt(5.0f)));
-        const float beta = -0.5f * sqrt(0.1f * (5.0f + sqrt(5.0f)));
+        const float alpha = 0.5f * sqrt(0.5f * (5.0f + sqrt(5.0f))); // 0.9510565163
+        const float beta = -0.5f * sqrt(0.1f * (5.0f + sqrt(5.0f))); // -0.4253254042
         
-        const float a0 = (sqrt(5.0f) - 5.0f) / 40.0f;
-        const float a1 = (11.0f * sqrt(5.0f) - 15.0f) / 40.0f;
-        const float a2 = sqrt(5.0f) / 10.0f;
+        const float a0 = (sqrt(5.0f) - 5.0f) / 40.0f; // -0.06909830056
+        const float a1 = (11.0f * sqrt(5.0f) - 15.0f) / 40.0f; // 0.2399186938
+        const float a2 = sqrt(5.0f) / 10.0f; // 0.2236067977
         
-        const vec3 v0V1 = AmbientDice::vertexPositions[i1] - AmbientDice::vertexPositions[i0];
-        const vec3 v0V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i0];
-        const vec3 v1V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i1];
+        // Project the edges onto the sphere.
+        vec3 v0V1 = AmbientDice::vertexPositions[i1] - AmbientDice::vertexPositions[i0];
+        v0V1 = v0V1 - normalize(AmbientDice::vertexPositions[i0]) * dot(normalize(AmbientDice::vertexPositions[i0]), v0V1);
+        v0V1 = normalize(v0V1);
         
-        const float fValueFactor = -beta / alpha;
-        const float fDerivativeFactor = 1.0 / (3.0 * alpha);
+        vec3 v1V0 = AmbientDice::vertexPositions[i0] - AmbientDice::vertexPositions[i1];
+        v1V0 = v1V0 - normalize(AmbientDice::vertexPositions[i1]) * dot(normalize(AmbientDice::vertexPositions[i1]), v1V0);
+        v1V0 = normalize(v1V0);
+        
+        vec3 v0V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i0];
+        v0V2 = v0V2 - normalize(AmbientDice::vertexPositions[i0]) * dot(normalize(AmbientDice::vertexPositions[i0]), v0V2);
+        v0V2 = normalize(v0V2);
+        
+        vec3 v2V0 = AmbientDice::vertexPositions[i0] - AmbientDice::vertexPositions[i2];
+        v2V0 = v2V0 - normalize(AmbientDice::vertexPositions[i2]) * dot(normalize(AmbientDice::vertexPositions[i2]), v2V0);
+        v2V0 = normalize(v2V0);
+        
+        vec3 v1V2 = AmbientDice::vertexPositions[i2] - AmbientDice::vertexPositions[i1];
+        v1V2 = v1V2 - normalize(AmbientDice::vertexPositions[i1]) * dot(normalize(AmbientDice::vertexPositions[i1]), v1V2);
+        v1V2 = normalize(v1V2);
+        
+        vec3 v2V1 = AmbientDice::vertexPositions[i1] - AmbientDice::vertexPositions[i2];
+        v2V1 = v2V1 - normalize(AmbientDice::vertexPositions[i2]) * dot(normalize(AmbientDice::vertexPositions[i2]), v2V1);
+        v2V1 = normalize(v2V1);
+        
+        const float fValueFactor = -beta / alpha; // 0.4472135955
+        const float fDerivativeFactor = 1.0 / (3.0 * alpha); // 0.3504874081
         
         const float weightDenom = b1 * b2 + b0 * b2 + b0 * b1;
         
@@ -270,33 +411,60 @@ namespace Probulator {
         c201Weight += a2 * c2_111Weight;
         c021Weight += a2 * c2_111Weight;
         
-        v1ValueWeight += fValueFactor * c120Weight;
-        v1DUWeight += fDerivativeFactor * dot(-v0V1, AmbientDice::tangents[i1]) * c120Weight;
-        v1DVWeight += fDerivativeFactor * dot(-v0V1, AmbientDice::bitangents[i1]) * c120Weight;
-        
-        v1ValueWeight += fValueFactor * c021Weight;
-        v1DUWeight += fDerivativeFactor * dot(v1V2, AmbientDice::tangents[i1]) * c021Weight;
-        v1DVWeight += fDerivativeFactor * dot(v1V2, AmbientDice::bitangents[i1]) * c021Weight;
         
         v0ValueWeight += fValueFactor * c210Weight;
         v0DUWeight += fDerivativeFactor * dot(v0V1, AmbientDice::tangents[i0]) * c210Weight;
         v0DVWeight += fDerivativeFactor * dot(v0V1, AmbientDice::bitangents[i0]) * c210Weight;
         
-        v2ValueWeight += fValueFactor * c012Weight;
-        v2DUWeight += fDerivativeFactor * dot(-v1V2, AmbientDice::tangents[i2]) * c012Weight;
-        v2DVWeight += fDerivativeFactor * dot(-v1V2, AmbientDice::bitangents[i2]) * c012Weight;
-        
         v0ValueWeight += fValueFactor * c201Weight;
         v0DUWeight += fDerivativeFactor * dot(v0V2, AmbientDice::tangents[i0]) * c201Weight;
         v0DVWeight += fDerivativeFactor * dot(v0V2, AmbientDice::bitangents[i0]) * c201Weight;
         
+        v1ValueWeight += fValueFactor * c120Weight;
+        v1DUWeight += fDerivativeFactor * dot(v1V0, AmbientDice::tangents[i1]) * c120Weight;
+        v1DVWeight += fDerivativeFactor * dot(v1V0, AmbientDice::bitangents[i1]) * c120Weight;
+        
+        v1ValueWeight += fValueFactor * c021Weight;
+        v1DUWeight += fDerivativeFactor * dot(v1V2, AmbientDice::tangents[i1]) * c021Weight;
+        v1DVWeight += fDerivativeFactor * dot(v1V2, AmbientDice::bitangents[i1]) * c021Weight;
+        
         v2ValueWeight += fValueFactor * c102Weight;
-        v2DUWeight += fDerivativeFactor * dot(-v0V2, AmbientDice::tangents[i2]) * c102Weight;
-        v2DVWeight += fDerivativeFactor * dot(-v0V2, AmbientDice::bitangents[i2]) * c102Weight;
+        v2DUWeight += fDerivativeFactor * dot(v2V0, AmbientDice::tangents[i2]) * c102Weight;
+        v2DVWeight += fDerivativeFactor * dot(v2V0, AmbientDice::bitangents[i2]) * c102Weight;
+        
+        v2ValueWeight += fValueFactor * c012Weight;
+        v2DUWeight += fDerivativeFactor * dot(v2V1, AmbientDice::tangents[i2]) * c012Weight;
+        v2DVWeight += fDerivativeFactor * dot(v2V1, AmbientDice::bitangents[i2]) * c012Weight;
         
         v0ValueWeight += c300Weight;
         v1ValueWeight += c030Weight;
         v2ValueWeight += c003Weight;
+        
+//        v0ValueWeight = max(0.f, v0ValueWeight);
+//        v1ValueWeight = max(0.f, v1ValueWeight);
+//        v2ValueWeight = max(0.f, v2ValueWeight);
+//
+//        v0DUWeight = max(0.f, v0DUWeight);
+//        v0DVWeight = max(0.f, v0DVWeight);
+//
+//        v1DUWeight = max(0.f, v1DUWeight);
+//        v1DVWeight = max(0.f, v1DVWeight);
+//
+//        v2DUWeight = max(0.f, v2DUWeight);
+//        v2DVWeight = max(0.f, v2DVWeight);
+        
+        assert(v0ValueWeight >= 0.f);
+        assert(v1ValueWeight >= 0.f);
+        assert(v2ValueWeight >= 0.f);
+        
+//        assert(v0DUWeight >= 0.f);
+//        assert(v1DUWeight >= 0.f);
+//        assert(v2DUWeight >= 0.f);
+//
+//        assert(v0DVWeight >= 0.f);
+//        assert(v1DVWeight >= 0.f);
+//        assert(v2DVWeight >= 0.f);
+        
         
         *w0Out = { v0ValueWeight, v0DUWeight, v0DVWeight };
         *w1Out = { v1ValueWeight, v1DUWeight, v1DVWeight };
@@ -305,18 +473,9 @@ namespace Probulator {
     
     void AmbientDice::hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const {
         
-        u32 triIndex = this->indexIcosahedronTriangle(direction);
-        u32 i0 = AmbientDice::triangleIndices[triIndex][0];
-        u32 i1 = AmbientDice::triangleIndices[triIndex][1];
-        u32 i2 = AmbientDice::triangleIndices[triIndex][2];
-        
-        vec3 n0 = AmbientDice::triangleBarycentricNormals[triIndex][0];
-        vec3 n1 = AmbientDice::triangleBarycentricNormals[triIndex][1];
-        vec3 n2 = AmbientDice::triangleBarycentricNormals[triIndex][2];
-        
-        float b0 = dot(direction, n0);
-        float b1 = dot(direction, n1);
-        float b2 = dot(direction, n2);
+        u32 i0, i1, i2;
+        float b0, b1, b2;
+        this->computeBarycentrics(direction, &i0, &i1, &i2, &b0, &b1, &b2);
         
         this->hybridCubicBezierWeights(i0, i1, i2, b0, b1, b2, w0Out, w1Out, w2Out);
         
@@ -425,7 +584,7 @@ namespace Probulator {
     AmbientDice ExperimentAmbientDice::solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance)
     {
         AmbientDice ambientDice;
-        AmbientDice::VertexWeights vertexWeights[12] = { { 0 } };
+        AmbientDice::VertexWeights vertexWeights[12] = { { 0.f, 0.f, 0.f } };
         
         const u64 sampleCount = directions.getPixelCount();
         
@@ -435,32 +594,18 @@ namespace Probulator {
         
         std::random_shuffle(sampleIndices.begin(), sampleIndices.end());
         
+        float sampleIndex = 0.f;
         for (u64 sampleIt : sampleIndices)
         {
+            sampleIndex += 1;
+            
             const vec3& direction = directions.at(sampleIt);
             
-            u32 triIndex = ambientDice.indexIcosahedronTriangle(direction);
-            u32 i0 = AmbientDice::triangleIndices[triIndex][0];
-            u32 i1 = AmbientDice::triangleIndices[triIndex][1];
-            u32 i2 = AmbientDice::triangleIndices[triIndex][2];
-            
-            const vec3& v0 = AmbientDice::vertexPositions[i0];
-            const vec3& v1 = AmbientDice::vertexPositions[i1];
-            const vec3& v2 = AmbientDice::vertexPositions[i2];
-            
-            vec3 n0 = normalize(cross(v1, v2));
-            vec3 n1 = normalize(cross(v0, v2));
-            vec3 n2 = normalize(cross(v0, v1));
-            
-            float b0 = dot(direction, n0) / dot(v0, n0);
-            float b1 = dot(direction, n1) / dot(v1, n1);
-            float b2 = dot(direction, n2) / dot(v2, n2);
-            
-            //            return hybridCubicBezier(i0, i1, i2, b0, b1, b2);
-            
-            u32 indices[3] = {i0, i1, i2};
+            u32 i0, i1, i2;
             AmbientDice::VertexWeights weights[3];
-            ambientDice.hybridCubicBezierWeights(i0, i1, i2, b0, b1, b2, &weights[0], &weights[1], &weights[2]);
+            ambientDice.hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
+            
+            const u32 indices[3] = { i0, i1, i2 };
             
             // What's the current value in the sample's direction?
             vec4 targetValue = irradiance.at(sampleIt);
@@ -475,32 +620,38 @@ namespace Probulator {
             weights[2].directionalDerivativeU * ambientDice.vertices[i2].directionalDerivativeU +
             weights[2].directionalDerivativeV * ambientDice.vertices[i2].directionalDerivativeV;
             
-            printf("Current estimate: %.3f, %.3f, %.3f\n", currentEstimate.r, currentEstimate.g, currentEstimate.b);
-            
             const vec3 delta = vec3(targetValue.x, targetValue.y, targetValue.z) - currentEstimate;
+            
+            const float sampleWeightScale = 1.f / sampleIndex;
             
             for (u64 i = 0; i < 3; i += 1) {
                 u32 index = indices[i];
                 const AmbientDice::VertexWeights &weight = weights[i];
                 
-                vertexWeights[index].value += weight.value;
-                vertexWeights[index].directionalDerivativeU += weight.directionalDerivativeU;
-                vertexWeights[index].directionalDerivativeV += weight.directionalDerivativeV;
+                vertexWeights[index].value += (weight.value * weight.value - vertexWeights[index].value) * sampleWeightScale;
+                vertexWeights[index].directionalDerivativeU += (weight.directionalDerivativeU * weight.directionalDerivativeU - vertexWeights[index].directionalDerivativeU) * sampleWeightScale;
+                vertexWeights[index].directionalDerivativeV += (weight.directionalDerivativeV * weight.directionalDerivativeV - vertexWeights[index].directionalDerivativeV) * sampleWeightScale;
                 
-                if (weight.value != 0.f) {
-                    float weightScale = weight.value / vertexWeights[index].value;
-                    ambientDice.vertices[index].value += delta * weightScale;
+                {
+                    float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[index].value;
+                    
+                    float deltaScale = 1.0f * weights[index].value * sampleWeightScale / sphericalIntegral;
+                    ambientDice.vertices[index].value += delta * deltaScale;
                 }
                 
-//                if (weight.directionalDerivativeU != 0.f) {
-//                    float weightScale = weight.directionalDerivativeU / vertexWeights[index].directionalDerivativeU;
-//                    ambientDice.vertices[index].directionalDerivativeU += delta * weightScale;
-//                }
-//                
-//                if (weight.directionalDerivativeV != 0.f) {
-//                    float weightScale = weight.directionalDerivativeV / vertexWeights[index].directionalDerivativeV;
-//                    ambientDice.vertices[index].directionalDerivativeV += delta * weightScale;
-//                }
+                {
+                    float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[index].directionalDerivativeU;
+                    
+                    float deltaScale = 1.0f * weights[index].directionalDerivativeU * sampleWeightScale / sphericalIntegral;
+                    ambientDice.vertices[index].directionalDerivativeU += delta * deltaScale;
+                }
+                
+                {
+                    float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[index].directionalDerivativeV;
+                    
+                    float deltaScale = 1.0f * weights[index].directionalDerivativeV * sampleWeightScale / sphericalIntegral;
+                    ambientDice.vertices[index].directionalDerivativeV += delta * deltaScale;
+                }
                 
                 if (false /* nonNegative */) {
                     ambientDice.vertices[index].value = max(ambientDice.vertices[index].value, vec3(0.f));
@@ -516,60 +667,182 @@ namespace Probulator {
     AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance)
     {
         using namespace Eigen;
-        
+
         AmbientDice ambientDice;
-        
+
         const u64 sampleCount = directions.getPixelCount();
-        
-        MatrixXf A = MatrixXf::Zero(sampleCount, 36);
-        
+
+        MatrixXf moments = MatrixXf::Zero(36, 3);
+
         for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
         {
             const vec3& direction = directions.at(sampleIt);
-            
+            const vec4& colour = irradiance.at(sampleIt);
+
             u32 i0, i1, i2;
             AmbientDice::VertexWeights weights[3];
             ambientDice.hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
-            
-            A(sampleIt, i0) = weights[0].value;
-            A(sampleIt, i0 + 12) = weights[0].directionalDerivativeU;
-            A(sampleIt, i0 + 24) = weights[0].directionalDerivativeV;
-            
-            A(sampleIt, i1) = weights[1].value;
-            A(sampleIt, i1 + 12) = weights[1].directionalDerivativeU;
-            A(sampleIt, i1 + 24) = weights[1].directionalDerivativeV;
-            
-            A(sampleIt, i2) = weights[2].value;
-            A(sampleIt, i2 + 12) = weights[2].directionalDerivativeU;
-            A(sampleIt, i2 + 24) = weights[2].directionalDerivativeV;
-            
+
+            moments(3 * i0 + 0, 0) += weights[0].value * colour.r / float(sampleCount);
+            moments(3 * i0 + 1, 0) += weights[0].directionalDerivativeU * colour.r / float(sampleCount);
+            moments(3 * i0 + 2, 0) += weights[0].directionalDerivativeV * colour.r / float(sampleCount);
+
+            moments(3 * i1 + 0, 0) += weights[1].value * colour.r / float(sampleCount);
+            moments(3 * i1 + 1, 0) += weights[1].directionalDerivativeU * colour.r / float(sampleCount);
+            moments(3 * i1 + 2, 0) += weights[1].directionalDerivativeV * colour.r / float(sampleCount);
+
+            moments(3 * i2 + 0, 0) += weights[2].value * colour.r / float(sampleCount);
+            moments(3 * i2 + 1, 0) += weights[2].directionalDerivativeU * colour.r / float(sampleCount);
+            moments(3 * i2 + 2, 0) += weights[2].directionalDerivativeV * colour.r / float(sampleCount);
+
+            moments(3 * i0 + 0, 1) += weights[0].value * colour.g / float(sampleCount);
+            moments(3 * i0 + 1, 1) += weights[0].directionalDerivativeU * colour.g / float(sampleCount);
+            moments(3 * i0 + 2, 1) += weights[0].directionalDerivativeV * colour.g / float(sampleCount);
+
+            moments(3 * i1 + 0, 1) += weights[1].value * colour.g / float(sampleCount);
+            moments(3 * i1 + 1, 1) += weights[1].directionalDerivativeU * colour.g / float(sampleCount);
+            moments(3 * i1 + 2, 1) += weights[1].directionalDerivativeV * colour.g / float(sampleCount);
+
+            moments(3 * i2 + 0, 1) += weights[2].value * colour.g / float(sampleCount);
+            moments(3 * i2 + 1, 1) += weights[2].directionalDerivativeU * colour.g / float(sampleCount);
+            moments(3 * i2 + 2, 1) += weights[2].directionalDerivativeV * colour.g / float(sampleCount);
+
+            moments(3 * i0 + 0, 2) += weights[0].value * colour.b / float(sampleCount);
+            moments(3 * i0 + 1, 2) += weights[0].directionalDerivativeU * colour.b / float(sampleCount);
+            moments(3 * i0 + 2, 2) += weights[0].directionalDerivativeV * colour.b / float(sampleCount);
+
+            moments(3 * i1 + 0, 2) += weights[1].value * colour.b / float(sampleCount);
+            moments(3 * i1 + 1, 2) += weights[1].directionalDerivativeU * colour.b / float(sampleCount);
+            moments(3 * i1 + 2, 2) += weights[1].directionalDerivativeV * colour.b / float(sampleCount);
+
+            moments(3 * i2 + 0, 2) += weights[2].value * colour.b / float(sampleCount);
+            moments(3 * i2 + 1, 2) += weights[2].directionalDerivativeU * colour.b / float(sampleCount);
+            moments(3 * i2 + 2, 2) += weights[2].directionalDerivativeV * colour.b / float(sampleCount);
         }
-        
-        NNLS<MatrixXf> solver(A);
-        
+
+        MatrixXf gram;
+        gram.resize(36, 36);
+        for (u64 lobeAIt = 0; lobeAIt < 36; ++lobeAIt)
+        {
+            for (u64 lobeBIt = lobeAIt; lobeBIt < 36; ++lobeBIt)
+            {
+                float integral = 0.f;
+
+                for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+                {
+                    float allWeights[36] = { 0.f };
+                    
+                    const vec3& direction = directions.at(sampleIt);
+
+                    u32 i0, i1, i2;
+                    AmbientDice::VertexWeights weights[3];
+                    ambientDice.hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
+
+                    allWeights[3 * i0 + 0] = weights[0].value;
+                    allWeights[3 * i0 + 1] = weights[0].directionalDerivativeU;
+                    allWeights[3 * i0 + 2] = weights[0].directionalDerivativeV;
+                    
+                    allWeights[3 * i1 + 0] = weights[1].value;
+                    allWeights[3 * i1 + 1] = weights[1].directionalDerivativeU;
+                    allWeights[3 * i1 + 2] = weights[1].directionalDerivativeV;
+                    
+                    allWeights[3 * i2 + 0] = weights[2].value;
+                    allWeights[3 * i2 + 1] = weights[2].directionalDerivativeU;
+                    allWeights[3 * i2 + 2] = weights[2].directionalDerivativeV;
+                    
+                    integral += allWeights[lobeAIt] * allWeights[lobeBIt];
+                }
+
+                integral *= /* 4 * M_PI */ 1.f / float(sampleCount);
+
+                gram(lobeAIt, lobeBIt) = integral;
+                gram(lobeBIt, lobeAIt) = integral;
+            }
+        }
+
+        NNLS<MatrixXf> solver(gram);
+
         VectorXf b;
-        b.resize(sampleCount);
-        
+        b.resize(36);
+
         for (u32 channelIt = 0; channelIt < 3; ++channelIt)
         {
-            for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+            for (u64 lobeIt = 0; lobeIt < 36; ++lobeIt)
             {
-                b[sampleIt] = irradiance.at(sampleIt)[channelIt];
+                b[lobeIt] = moments(lobeIt, channelIt);
             }
-            
+
             solver.solve(b);
             VectorXf x = solver.x();
-            
+
             for (u64 basisIt = 0; basisIt < 12; ++basisIt)
             {
-                ambientDice.vertices[basisIt].value[channelIt] = x[basisIt];
-                ambientDice.vertices[basisIt].directionalDerivativeU[channelIt] = x[basisIt + 12];
-                ambientDice.vertices[basisIt].directionalDerivativeV[channelIt] = x[basisIt + 24];
+                ambientDice.vertices[basisIt].value[channelIt] = x[3 * basisIt];
+                ambientDice.vertices[basisIt].directionalDerivativeU[channelIt] = x[3 * basisIt + 1];
+                ambientDice.vertices[basisIt].directionalDerivativeV[channelIt] = x[3 * basisIt + 2];
             }
         }
-        
+
         return ambientDice;
     }
+    
+//    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance)
+//    {
+//        using namespace Eigen;
+//
+//        AmbientDice ambientDice;
+//
+//        const u64 sampleCount = directions.getPixelCount();
+//
+//        MatrixXf A = MatrixXf::Zero(sampleCount, 36);
+//
+//        for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+//        {
+//            const vec3& direction = directions.at(sampleIt);
+//
+//            u32 i0, i1, i2;
+//            AmbientDice::VertexWeights weights[3];
+//            ambientDice.hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
+//
+//            A(sampleIt, 3 * i0) = weights[0].value;
+//            A(sampleIt, 3 * i0 + 1) = weights[0].directionalDerivativeU;
+//            A(sampleIt, 3 * i0 + 2) = weights[0].directionalDerivativeV;
+//
+//            A(sampleIt, 3 * i1) = weights[1].value;
+//            A(sampleIt, 3 * i1 + 1) = weights[1].directionalDerivativeU;
+//            A(sampleIt, 3 * i1 + 2) = weights[1].directionalDerivativeV;
+//
+//            A(sampleIt, 3 * i2) = weights[2].value;
+//            A(sampleIt, 3 * i2 + 1) = weights[2].directionalDerivativeU;
+//            A(sampleIt, 3 * i2 + 2) = weights[2].directionalDerivativeV;
+//
+//        }
+//
+//        NNLS<MatrixXf> solver(A);
+//
+//        VectorXf b;
+//        b.resize(sampleCount);
+//
+//        for (u32 channelIt = 0; channelIt < 3; ++channelIt)
+//        {
+//            for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+//            {
+//                b[sampleIt] = irradiance.at(sampleIt)[channelIt];
+//            }
+//
+//            solver.solve(b);
+//            VectorXf x = solver.x();
+//
+//            for (u64 basisIt = 0; basisIt < 12; ++basisIt)
+//            {
+//                ambientDice.vertices[basisIt].value[channelIt] = x[3 * basisIt];
+//                ambientDice.vertices[basisIt].directionalDerivativeU[channelIt] = x[3 * basisIt + 1];
+//                ambientDice.vertices[basisIt].directionalDerivativeV[channelIt] = x[3 * basisIt + 2];
+//            }
+//        }
+//
+//        return ambientDice;
+//    }
     
     void ExperimentAmbientDice::run(SharedData& data)
     {

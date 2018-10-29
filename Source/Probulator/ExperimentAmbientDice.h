@@ -86,6 +86,25 @@ namespace Probulator {
             return t;
         }
         
+        inline void computeBarycentrics(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, float *b0Out, float *b1Out, float *b2Out) const {
+            u32 triIndex = this->indexIcosahedronTriangle(direction);
+            u32 i0 = AmbientDice::triangleIndices[triIndex][0];
+            u32 i1 = AmbientDice::triangleIndices[triIndex][1];
+            u32 i2 = AmbientDice::triangleIndices[triIndex][2];
+            
+            *i0Out = i0;
+            *i1Out = i1;
+            *i2Out = i2;
+            
+            vec3 n0 = AmbientDice::triangleBarycentricNormals[triIndex][0];
+            vec3 n1 = AmbientDice::triangleBarycentricNormals[triIndex][1];
+            vec3 n2 = AmbientDice::triangleBarycentricNormals[triIndex][2];
+            
+            *b0Out = dot(direction, n0);
+            *b1Out = dot(direction, n1);
+            *b2Out = dot(direction, n2);
+        }
+        
         vec3 hybridCubicBezier(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2) const;
         void hybridCubicBezierWeights(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2) const;
         void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const;
@@ -93,21 +112,8 @@ namespace Probulator {
         inline vec3 evaluateLinear(const vec3& direction) const
         {
             u32 i0, i1, i2;
-            this->indexIcosahedron(direction, &i0, &i1, &i2);
-            
-            const vec3& v0 = AmbientDice::vertexPositions[i0];
-            const vec3& v1 = AmbientDice::vertexPositions[i1];
-            const vec3& v2 = AmbientDice::vertexPositions[i2];
-            
-            vec3 n0 = normalize(cross(v1, v2));
-            vec3 n1 = normalize(cross(v0, v2));
-            vec3 n2 = normalize(cross(v0, v1));
-            
-            float b0 = dot(direction, n0) / dot(v0, n0);
-            float b1 = dot(direction, n1) / dot(v1, n1);
-            float b2 = dot(direction, n2) / dot(v2, n2);
-            
-//            return hybridCubicBezier(i0, i1, i2, b0, b1, b2);
+            float b0, b1, b2;
+            this->computeBarycentrics(direction, &i0, &i1, &i2, &b0, &b1, &b2);
             
             return b0 * this->vertices[i0].value + b1 * this->vertices[i1].value + b2 * this->vertices[i2].value;
         }
@@ -118,7 +124,7 @@ namespace Probulator {
             AmbientDice::VertexWeights weights[3];
             this->hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
-            return
+            vec3 result =
             weights[0].value * this->vertices[i0].value +
             weights[0].directionalDerivativeU * this->vertices[i0].directionalDerivativeU +
             weights[0].directionalDerivativeV * this->vertices[i0].directionalDerivativeV +
@@ -128,6 +134,15 @@ namespace Probulator {
             weights[2].value * this->vertices[i2].value +
             weights[2].directionalDerivativeU * this->vertices[i2].directionalDerivativeU +
             weights[2].directionalDerivativeV * this->vertices[i2].directionalDerivativeV;
+            
+            float b0, b1, b2;
+            this->computeBarycentrics(direction, &i0, &i1, &i2, &b0, &b1, &b2);
+            
+            vec3 otherResult = this->hybridCubicBezier(i0, i1, i2, b0, b1, b2);
+            
+            printf("Ratio is %.5f, %.5f, %.5f.\n", result.r / otherResult.r, result.g / otherResult.g, result.b / otherResult.b);
+            
+            return result;
         }
     };
 

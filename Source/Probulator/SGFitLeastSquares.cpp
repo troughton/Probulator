@@ -40,6 +40,13 @@ namespace Probulator
     
     SgBasis sgFitLeastSquaresMoments(const SgBasis& basis, const std::vector<RadianceSample>& samples)
     {
+        
+        printf("Lobe directions:\n");
+        for (const SphericalGaussian& lobe : basis) {
+            printf("float3(%f, %f, %f),\n", lobe.p.x, lobe.p.y, lobe.p.z);
+        }
+        printf("\nLobe lambda: %f\n", basis[0].lambda);
+        
         // Using the raw moments and inverse Gram matrix: Peter-Pike Sloan
         
         using namespace Eigen;
@@ -63,22 +70,64 @@ namespace Probulator
                 
                 gram(lobeAIt, lobeBIt) = integral;
                 gram(lobeBIt, lobeAIt) = integral;
-                
-                printf("%llu x %llu = %.3f\n", lobeAIt, lobeBIt, integral);
             }
         }
+        
+        printf("Row diagonally dominant checks:\n");
+        for (u64 row = 0; row < basis.size(); ++row)
+        {
+            float total = fabs(gram(row, row));
+            
+            for (u64 col = 0; col < basis.size(); ++col)
+            {
+                if (col == row) { continue; }
+                
+                total -= fabs(gram(row, col));
+            }
+            printf("%llu: %f\n", row, total);
+        }
+        
+        printf("Gram Matrix:\n");
+        
+        for (u64 lobeAIt = 0; lobeAIt < basis.size(); ++lobeAIt)
+        {
+            printf("[ ");
+            for (u64 lobeBIt = 0; lobeBIt < basis.size(); ++lobeBIt)
+            {
+                printf("%f, ", gram(lobeAIt, lobeBIt));
+            }
+            printf("],\n");
+        }
+        
+        printf("Inverse Gram Matrix:\n");
         
         MatrixXf gramInverse = gram.inverse();
         
         for (u64 lobeAIt = 0; lobeAIt < basis.size(); ++lobeAIt)
         {
-            printf("( ");
+            printf("[ ");
             for (u64 lobeBIt = 0; lobeBIt < basis.size(); ++lobeBIt)
             {
-                printf("%.3f ", gramInverse(lobeAIt, lobeBIt));
+                printf("%f, ", gramInverse(lobeAIt, lobeBIt));
             }
-            printf(")\n");
+            printf("],\n");
         }
+        
+        MatrixXf diagonalInv = MatrixXf::Identity(gram.rows(), gram.cols());
+        for (u64 lobeIt = 0; lobeIt < basis.size(); ++lobeIt)
+        {
+            diagonalInv.coeffRef(lobeIt, lobeIt) = 1.0 / gram(lobeIt, lobeIt);
+        }
+        
+        MatrixXf cJabobi = MatrixXf::Identity(gram.rows(), gram.cols()) - diagonalInv * gram;
+        
+        printf("CJacobi Eigenvalues:\n");
+        auto eigenValues = cJabobi.eigenvalues();
+        for (u64 i = 0; i < eigenValues.rows(); i += 1) {
+            printf("%f %f\n", eigenValues[i].real(), eigenValues[i].imag());
+        }
+        
+        MatrixXf identityRight = gramInverse * gram;
         
         for (u32 channelIt = 0; channelIt < 3; ++channelIt)
         {

@@ -60,8 +60,6 @@ public:
 
         void generateSamples(u32 sampleCount, Image& image, std::vector<RadianceSample>& samples)
         {
-            std::mt19937 rng(13123);
-            
             samples.reserve(sampleCount);
             for (u32 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
             {

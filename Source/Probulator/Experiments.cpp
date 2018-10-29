@@ -51,8 +51,8 @@ void addAllExperiments(ExperimentList& experiments)
 		.setSolveType(ExperimentAmbientCube::SolveType::Projection)
 		.setInput(experimentMCIS);
     
-//    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice [Linear Running Average]", "ADRA")
-//        .setInput(experimentMCIS);
+    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice [Least Squares]", "AD")
+        .setInput(experimentMCIS);
 
     addExperiment<ExperimentSHL1Geomerics>(experiments, "Spherical Harmonics L1 [Geomerics]", "SHL1G");
 

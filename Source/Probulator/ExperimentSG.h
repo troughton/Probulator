@@ -141,7 +141,10 @@ public:
             // The samples should be uniformly randomly distributed (or stratified) for best results.
             std::random_shuffle(radianceSamples.begin(), radianceSamples.end());
             
+            float i = 0;
             for (size_t sampleIdx = 0; sampleIdx < radianceSamples.size(); sampleIdx += 1) {
+                i += 1;
+                
                 const RadianceSample& sample = radianceSamples[sampleIdx];
                 
                 vec3 currentValue = vec3(0.f);
@@ -155,7 +158,6 @@ public:
                     sampleLobeWeights[lobeIt] = weight;
                 }
                 
-                vec3 deltaValue = sample.value - currentValue;
                 
                 for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
                     float weight = sampleLobeWeights[lobeIt];
@@ -163,8 +165,12 @@ public:
                     
                     lobeWeights[lobeIt] += weight;
                     
-                    float weightScale = weight / lobeWeights[lobeIt];
-                    m_lobes[lobeIt].mu += deltaValue * weightScale;
+                    float sphericalIntegralEstimate = lobeWeights[lobeIt] / i;
+                    
+                    vec3 otherLobesContribution = currentValue - m_lobes[lobeIt].mu * weight;
+                    vec3 deltaValue = weight * (sample.value - otherLobesContribution + (1 - weight) * m_lobes[lobeIt].mu) / sphericalIntegralEstimate;
+                    
+                    m_lobes[lobeIt].mu += (deltaValue - m_lobes[lobeIt].mu) / i;
                     
                     if (m_nonNegativeSolve) {
                         m_lobes[lobeIt].mu = max(m_lobes[lobeIt].mu, vec3(0.f));
@@ -178,48 +184,131 @@ class ExperimentSGRunningAverage : public ExperimentSGBase
 {
 public:
     
-    void solveForRadiance(const std::vector<RadianceSample>& _radianceSamples) override
+//    void solveForRadiance(const std::vector<RadianceSample>& radianceSamples) override
+//    {
+//        const u32 lobeCount = (u32)m_lobes.size();
+//
+//        float lobeMCSphericalIntegrals[lobeCount];
+//
+//        for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
+//            lobeMCSphericalIntegrals[lobeIt] = 0.f;
+//        }
+//
+//        float lobePrecomputedSphericalIntegrals[lobeCount];
+//        for (u64 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
+//        {
+//            lobePrecomputedSphericalIntegrals[lobeIt] = (1.f - exp(-4.f * m_lobes[lobeIt].lambda)) / (4 * m_lobes[lobeIt].lambda);
+//        }
+//
+//        float totalSampleWeight = 0.f;
+//
+//        float i = 0.f;
+//        for (const RadianceSample& sample : radianceSamples) {
+//            i += 1.f;
+//            const float sampleWeight = 1.f; //1.f - expf(-0.1 * i / float(radianceSamples.size()));
+//            totalSampleWeight += sampleWeight;
+//            float sampleWeightScale = sampleWeight / totalSampleWeight;
+//
+//            vec3 currentEstimate = vec3(0.f);
+//
+//            float sampleLobeWeights[lobeCount];
+//            for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
+//                float dotProduct = dot(m_lobes[lobeIt].p, sample.direction);
+//                float weight = exp(m_lobes[lobeIt].lambda * (dotProduct - 1.0));
+//                currentEstimate += m_lobes[lobeIt].mu * weight;
+//
+//                sampleLobeWeights[lobeIt] = weight;
+//            }
+//
+//            vec3 delta = sample.value - currentEstimate;
+//
+//            for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
+//                float weight = sampleLobeWeights[lobeIt];
+//                if (weight == 0.f) { continue; }
+//
+//                float sphericalIntegralGuess = weight * weight;
+//
+//                // Update the MC-computed integral of the lobe over the domain.
+//                lobeMCSphericalIntegrals[lobeIt] += (sphericalIntegralGuess - lobeMCSphericalIntegrals[lobeIt]) * sampleWeightScale;
+//            }
+//
+//            vec3 lobeAmplitudeDeltas[lobeCount];
+//            for (u64 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
+//            {
+//                lobeAmplitudeDeltas[lobeIt] = vec3(0);
+//            }
+//
+//            for (u32 it = 0; it < 1; it += 1) {
+//                for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
+//                    float weight = sampleLobeWeights[lobeIt];
+//                    if (weight == 0.f) { continue; }
+//
+//                    // The most accurate method requires using the MC-computed integral,
+//                    // since then bias in the estimate will partially cancel out.
+//                    // However, if you don't want to store a weight per-lobe you can instead substitute it with the
+//                    // precomputed integral at a slight increase in error.
+//
+//                    // Clamp the MC-computed integral to within a reasonable ad-hoc factor of the actual integral to avoid noise.
+//                    float sphericalIntegral = max(lobeMCSphericalIntegrals[lobeIt], lobePrecomputedSphericalIntegrals[lobeIt]);
+//
+//                    vec3 projection = (m_lobes[lobeIt].mu + lobeAmplitudeDeltas[lobeIt]) * weight;
+//                    vec3 newValue = (delta + projection) * weight / sphericalIntegral;
+//
+//                    lobeAmplitudeDeltas[lobeIt] = (newValue - m_lobes[lobeIt].mu) * sampleWeightScale;
+//
+////                    delta += projection - (m_lobes[lobeIt].mu + lobeAmplitudeDeltas[lobeIt]) * weight;
+//                }
+//            }
+//
+//
+//            for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
+//                m_lobes[lobeIt].mu += (newValue - m_lobes[lobeIt].mu) * sampleWeightScale;
+//
+//                if (m_nonNegativeSolve) {
+//                    m_lobes[lobeIt].mu = max(m_lobes[lobeIt].mu, vec3(0.f));
+//                }
+//            }
+//
+//        }
+//    }
+    
+    void solveForRadiance(const std::vector<RadianceSample>& radianceSamples) override
     {
         const u32 lobeCount = (u32)m_lobes.size();
-
-        std::vector<RadianceSample> radianceSamples = _radianceSamples;
-        // The samples should be uniformly randomly distributed (or stratified) for best results.
-//                std::random_shuffle(radianceSamples.begin(), radianceSamples.end());
-
+        
         float lobeMCSphericalIntegrals[lobeCount];
-
-        for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
-            lobeMCSphericalIntegrals[lobeIt] = 0.f;
-        }
-
         float lobePrecomputedSphericalIntegrals[lobeCount];
+        
         for (u64 lobeIt = 0; lobeIt < lobeCount; ++lobeIt)
         {
+            lobeMCSphericalIntegrals[lobeIt] = 0.f;
             lobePrecomputedSphericalIntegrals[lobeIt] = (1.f - exp(-4.f * m_lobes[lobeIt].lambda)) / (4 * m_lobes[lobeIt].lambda);
         }
-
+        
         float totalSampleWeight = 0.f;
+        
         
         for (const RadianceSample& sample : radianceSamples) {
             const float sampleWeight = 1.f;
             totalSampleWeight += sampleWeight;
             float sampleWeightScale = sampleWeight / totalSampleWeight;
-
-            vec3 currentEstimate = vec3(0.f);
-
+            
+            vec3 delta = sample.value;
+            
             float sampleLobeWeights[lobeCount];
+            
             for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
                 float dotProduct = dot(m_lobes[lobeIt].p, sample.direction);
-                float weight = exp(m_lobes[lobeIt].lambda * (dotProduct - 1.0));
-                currentEstimate += m_lobes[lobeIt].mu * weight;
-
+                float weight = exp(m_lobes[lobeIt].lambda * (dotProduct - 1.0f));
+                delta -= m_lobes[lobeIt].mu * weight;
+                
                 sampleLobeWeights[lobeIt] = weight;
             }
-
+            
             for (u32 lobeIt = 0; lobeIt < lobeCount; ++lobeIt) {
                 float weight = sampleLobeWeights[lobeIt];
                 if (weight == 0.f) { continue; }
-
+                
                 float sphericalIntegralGuess = weight * weight;
                 
                 // Update the MC-computed integral of the lobe over the domain.
@@ -231,16 +320,23 @@ public:
                 // precomputed integral at a slight increase in error.
                 
                 // Clamp the MC-computed integral to within a reasonable ad-hoc factor of the actual integral to avoid noise.
-                float sphericalIntegral = max(lobeMCSphericalIntegrals[lobeIt], lobePrecomputedSphericalIntegrals[lobeIt] * 0.75f);
+//                float sphericalIntegral = max(lobeMCSphericalIntegrals[lobeIt], lobePrecomputedSphericalIntegrals[lobeIt]);
+                float sphericalIntegral = sampleWeightScale + (1.f - sampleWeightScale) * lobeMCSphericalIntegrals[lobeIt];
                 
-                vec3 otherLobesContribution = currentEstimate - m_lobes[lobeIt].mu * weight;
-                vec3 newValue = (sample.value - otherLobesContribution) * weight / sphericalIntegral;
+                //                vec3 newValue = (delta + projection) * weight / sphericalIntegral;
+                //                m_lobes[lobeIt].mu += (newValue - m_lobes[lobeIt].mu) * sampleWeightScale;
                 
-                m_lobes[lobeIt].mu += (newValue - m_lobes[lobeIt].mu) * sampleWeightScale;
+                float deltaScale = weight * sampleWeightScale / sphericalIntegral;
+//                float dampingTerm = 1.f + (weight * weight / sphericalIntegral - 1.f) * sampleWeightScale;
+//                m_lobes[lobeIt].mu *= dampingTerm;
 
+                m_lobes[lobeIt].mu += 3.f * delta * deltaScale;
+                
                 if (m_nonNegativeSolve) {
                     m_lobes[lobeIt].mu = max(m_lobes[lobeIt].mu, vec3(0.f));
                 }
+                
+                delta *= 1.0f - deltaScale * weight;
             }
         }
     }
