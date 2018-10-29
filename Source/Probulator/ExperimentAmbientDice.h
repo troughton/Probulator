@@ -109,6 +109,8 @@ namespace Probulator {
         void hybridCubicBezierWeights(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2) const;
         void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const;
         
+        void srbfWeights(vec3 direction, float *weightsOut) const;
+        
         inline vec3 evaluateLinear(const vec3& direction) const
         {
             u32 i0, i1, i2;
@@ -116,6 +118,19 @@ namespace Probulator {
             this->computeBarycentrics(direction, &i0, &i1, &i2, &b0, &b1, &b2);
             
             return b0 * this->vertices[i0].value + b1 * this->vertices[i1].value + b2 * this->vertices[i2].value;
+        }
+        
+        inline vec3 evaluateSRBF(const vec3& direction) const
+        {
+            float weights[12];
+            this->srbfWeights(direction, weights);
+            
+            vec3 result = vec3(0.f);
+            for (u64 i = 0; i < 12; i += 1) {
+                result += weights[i] * this->vertices[i].value;
+            }
+            
+            return result;
         }
         
         inline vec3 evaluateBezier(const vec3& direction) const
@@ -152,8 +167,10 @@ namespace Probulator {
         public:
         
         static AmbientDice solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceRunningAverageSRBF(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceLeastSquaresSRBF(const ImageBase<vec3>& directions, const Image& irradiance);
         
         void run(SharedData& data) override;
     };

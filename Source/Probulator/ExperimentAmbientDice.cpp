@@ -484,6 +484,16 @@ namespace Probulator {
         *i2Out = i2;
     }
     
+    void AmbientDice::srbfWeights(vec3 direction, float *weightsOut) const {
+        for (u64 i = 0; i < 12; i += 1) {
+            float dotProduct = max(dot(direction, normalize(AmbientDice::vertexPositions[i])), 0.f);
+            float cos2 = dotProduct * dotProduct;
+            float cos4 = cos2 * cos2;
+            
+            weightsOut[i] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+        }
+    }
+    
     AmbientDice ExperimentAmbientDice::solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance)
     {
         AmbientDice ambientDice;
@@ -635,21 +645,21 @@ namespace Probulator {
                 {
                     float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[index].value;
                     
-                    float deltaScale = 1.0f * weights[index].value * sampleWeightScale / sphericalIntegral;
+                    float deltaScale = 1.0f * weights[i].value * sampleWeightScale / sphericalIntegral;
                     ambientDice.vertices[index].value += delta * deltaScale;
                 }
                 
                 {
                     float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[index].directionalDerivativeU;
                     
-                    float deltaScale = 1.0f * weights[index].directionalDerivativeU * sampleWeightScale / sphericalIntegral;
+                    float deltaScale = 1.0f * weights[i].directionalDerivativeU * sampleWeightScale / sphericalIntegral;
                     ambientDice.vertices[index].directionalDerivativeU += delta * deltaScale;
                 }
                 
                 {
                     float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[index].directionalDerivativeV;
                     
-                    float deltaScale = 1.0f * weights[index].directionalDerivativeV * sampleWeightScale / sphericalIntegral;
+                    float deltaScale = 1.0f * weights[i].directionalDerivativeV * sampleWeightScale / sphericalIntegral;
                     ambientDice.vertices[index].directionalDerivativeV += delta * deltaScale;
                 }
                 
@@ -657,6 +667,56 @@ namespace Probulator {
                     ambientDice.vertices[index].value = max(ambientDice.vertices[index].value, vec3(0.f));
                     ambientDice.vertices[index].directionalDerivativeU = max(ambientDice.vertices[index].directionalDerivativeU, vec3(0.f));
                     ambientDice.vertices[index].directionalDerivativeV = max(ambientDice.vertices[index].directionalDerivativeV, vec3(0.f));
+                }
+            }
+        }
+        
+        return ambientDice;
+    }
+    
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceRunningAverageSRBF(const ImageBase<vec3>& directions, const Image& irradiance)
+    {
+        AmbientDice ambientDice;
+        AmbientDice::VertexWeights vertexWeights[12] = { { 0.f, 0.f, 0.f } };
+        
+        const u64 sampleCount = directions.getPixelCount();
+        
+        std::vector<u64> sampleIndices;
+        sampleIndices.resize(sampleCount);
+        std::iota(sampleIndices.begin(), sampleIndices.end(), 0);
+        
+        std::random_shuffle(sampleIndices.begin(), sampleIndices.end());
+        
+        float sampleIndex = 0.f;
+        for (u64 sampleIt : sampleIndices)
+        {
+            sampleIndex += 1;
+            
+            const vec3& direction = directions.at(sampleIt);
+            
+            float weights[12];
+            ambientDice.srbfWeights(direction, weights);
+            
+            // What's the current value in the sample's direction?
+            vec4 targetValue = irradiance.at(sampleIt);
+            vec3 currentEstimate = ambientDice.evaluateSRBF(direction);
+            
+            const vec3 delta = vec3(targetValue.x, targetValue.y, targetValue.z) - currentEstimate;
+            
+            const float sampleWeightScale = 1.f / sampleIndex;
+            
+            for (u64 i = 0; i < 12; i += 1) {
+                float weight = weights[i];
+                
+                vertexWeights[i].value += (weight * weight - vertexWeights[i].value) * sampleWeightScale;
+                
+                float sphericalIntegral = sampleWeightScale + (1 - sampleWeightScale) * vertexWeights[i].value;
+                
+                float deltaScale = 3.0f * weight * sampleWeightScale / sphericalIntegral;
+                ambientDice.vertices[i].value += delta * deltaScale;
+                
+                if (false /* nonNegative */) {
+                    ambientDice.vertices[i].value = max(ambientDice.vertices[i].value, vec3(0.f));
                 }
             }
         }
@@ -844,8 +904,56 @@ namespace Probulator {
 //        return ambientDice;
 //    }
     
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresSRBF(const ImageBase<vec3>& directions, const Image& irradiance)
+    {
+        using namespace Eigen;
+
+        AmbientDice ambientDice;
+
+        const u64 sampleCount = directions.getPixelCount();
+
+        MatrixXf A = MatrixXf::Zero(sampleCount, 12);
+
+        for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+        {
+            const vec3& direction = directions.at(sampleIt);
+
+            float weights[12];
+            ambientDice.srbfWeights(direction, weights);
+
+            for (u64 i = 0; i < 12; i += 1) {
+                A(sampleIt, i) = weights[i];
+            }
+
+        }
+
+        NNLS<MatrixXf> solver(A);
+
+        VectorXf b;
+        b.resize(sampleCount);
+
+        for (u32 channelIt = 0; channelIt < 3; ++channelIt)
+        {
+            for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+            {
+                b[sampleIt] = irradiance.at(sampleIt)[channelIt];
+            }
+
+            solver.solve(b);
+            VectorXf x = solver.x();
+
+            for (u64 basisIt = 0; basisIt < 12; ++basisIt)
+            {
+                ambientDice.vertices[basisIt].value[channelIt] = x[basisIt];
+            }
+        }
+
+        return ambientDice;
+    }
+    
     void ExperimentAmbientDice::run(SharedData& data)
     {
+        AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_radianceImage);
         AmbientDice ambientDice = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
 
         m_radianceImage = Image(data.m_outputSize);
@@ -853,10 +961,12 @@ namespace Probulator {
 
         data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                           {
-                                              vec3 sampleIrradianceH = ambientDice.evaluateBezier(direction);
+                                              vec3 sampleRadiance = ambientDiceRadiance.evaluateSRBF(direction);
+                                              m_radianceImage.at(pixelPos) = vec4(sampleRadiance, 1.0f);
                                               
-                                              m_irradianceImage.at(pixelPos) = vec4(sampleIrradianceH, 1.0f);
-                                              m_radianceImage.at(pixelPos) = vec4(0.0f);
+                                              vec3 sampleIrradiance = ambientDice.evaluateBezier(direction);
+                                              
+                                              m_irradianceImage.at(pixelPos) = vec4(sampleIrradiance, 1.0f);
                                           });
     }
 }
