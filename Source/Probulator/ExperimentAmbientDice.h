@@ -10,7 +10,7 @@ namespace Probulator {
         static const float kT2;
         
         static const vec3 vertexPositions[12];
-        static const vec3 normalisedVertexPositions[12];
+        static const vec3 srbfNormalisedVertexPositions[6];
         static const vec3 tangents[12];
         static const vec3 bitangents[12];
         

@@ -27,19 +27,13 @@ namespace Probulator {
         vec3(-kT, -0.0, -1.0)
     };
     
-    const vec3 AmbientDice::normalisedVertexPositions[12] = {
+    const vec3 AmbientDice::srbfNormalisedVertexPositions[6] = {
         normalize(vec3(1.0, kT, 0.0)),
         normalize(vec3(-1.0, kT, 0.0)),
-        normalize(vec3(1.0, -kT, -0.0)),
-        normalize(vec3(-1.0, -kT, 0.0)),
         normalize(vec3(0.0, 1.0, kT)),
         normalize(vec3(-0.0, -1.0, kT)),
-        normalize(vec3(0.0, 1.0, -kT)),
-        normalize(vec3(0.0, -1.0, -kT)),
         normalize(vec3(kT, 0.0, 1.0)),
-        normalize(vec3(-kT, 0.0, 1.0)),
-        normalize(vec3(kT, -0.0, -1.0)),
-        normalize(vec3(-kT, -0.0, -1.0))
+        normalize(vec3(kT, -0.0, -1.0))
     };
     
     const vec3 AmbientDice::tangents[12] = {
@@ -484,35 +478,31 @@ namespace Probulator {
     }
     
     void AmbientDice::srbfWeights(vec3 direction, float *weightsOut) const {
-        for (u64 i = 0; i < 12; i += 1) {
-            float dotProduct = max(dot(direction, AmbientDice::normalisedVertexPositions[i]), 0.f);
+        for (u64 i = 0; i < 6; i += 1) {
+            float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
+            u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
+            
             float cos2 = dotProduct * dotProduct;
             float cos4 = cos2 * cos2;
             
-            weightsOut[i] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+            weightsOut[index] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
         }
     }
     
     vec3 AmbientDice::evaluateSRBF(const vec3& direction) const
     {
         vec3 result = vec3(0.f);
-        for (u64 i = 0; i < 12; i += 1) {
-            float dotProduct = max(dot(direction, AmbientDice::normalisedVertexPositions[i]), 0.f);
+        for (u64 i = 0; i < 6; i += 1) {
+            float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
+            u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
+            
             float cos2 = dotProduct * dotProduct;
             float cos4 = cos2 * cos2;
             
             float weight = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
-            result += weight * this->vertices[i].value;
+            result += weight * this->vertices[index].value;
         }
         
-        //            float weights[12];
-        //            this->srbfWeights(direction, weights);
-        //
-        //            vec3 result = vec3(0.f);
-        //            for (u64 i = 0; i < 12; i += 1) {
-        //                result += weights[i] * this->vertices[i].value;
-        //            }
-        //
         return result;
     }
     
@@ -639,7 +629,7 @@ namespace Probulator {
             
             const vec3& direction = directions.at(sampleIt);
             
-            float weights[12];
+            float weights[12] = { 0.f };
             ambientDice.srbfWeights(direction, weights);
             
             // What's the current value in the sample's direction?
@@ -865,7 +855,7 @@ namespace Probulator {
         {
             const vec3& direction = directions.at(sampleIt);
 
-            float weights[12];
+            float weights[12] = { 0.f };
             ambientDice.srbfWeights(direction, weights);
 
             for (u64 i = 0; i < 12; i += 1) {
