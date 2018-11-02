@@ -10,6 +10,7 @@ namespace Probulator {
         static const float kT2;
         
         static const vec3 vertexPositions[12];
+        static const vec3 normalisedVertexPositions[12];
         static const vec3 tangents[12];
         static const vec3 bitangents[12];
         
@@ -126,18 +127,7 @@ namespace Probulator {
             return b0 * this->vertices[i0].value + b1 * this->vertices[i1].value + b2 * this->vertices[i2].value;
         }
         
-        inline vec3 evaluateSRBF(const vec3& direction) const
-        {
-            float weights[12];
-            this->srbfWeights(direction, weights);
-            
-            vec3 result = vec3(0.f);
-            for (u64 i = 0; i < 12; i += 1) {
-                result += weights[i] * this->vertices[i].value;
-            }
-            
-            return result;
-        }
+        vec3 evaluateSRBF(const vec3& direction) const;
         
         inline vec3 evaluateBezier(const vec3& direction) const
         {
