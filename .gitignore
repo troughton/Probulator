@@ -2,3 +2,5 @@ Build
 imgui.ini
 *.sublime-project
 *.sublime-workspace
+/Source/Probulator/ExperimentAmbientD20.cpp
+/Source/Probulator/ExperimentAmbientD20.h

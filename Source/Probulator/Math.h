@@ -105,6 +105,20 @@ namespace Probulator
 
 		return abs(theta1 - theta0) * abs(sin(phi1) - sin(phi0));
 	}
+    
+    inline double latLongTexelAreaDouble(ivec2 pos, ivec2 imageSize)
+    {
+        vec2 uv0 = vec2(pos) / vec2(imageSize);
+        vec2 uv1 = vec2(pos + 1) / vec2(imageSize);
+        
+        double theta0 = M_PI*(uv0.x*2.0 - 1.0);
+        double theta1 = M_PI*(uv1.x*2.0 - 1.0);
+        
+        double phi0 = M_PI*(uv0.y - 0.5);
+        double phi1 = M_PI*(uv1.y - 0.5);
+        
+        return abs(theta1 - theta0) * abs(sin(phi1) - sin(phi0));
+    }
 
 
 	inline vec2 cartesianToLatLongTexcoord(vec3 p)

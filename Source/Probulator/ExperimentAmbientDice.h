@@ -150,14 +150,7 @@ namespace Probulator {
             weights[2].directionalDerivativeU * this->vertices[i2].directionalDerivativeU +
             weights[2].directionalDerivativeV * this->vertices[i2].directionalDerivativeV;
             
-            float b0, b1, b2;
-            this->computeBarycentrics(direction, &i0, &i1, &i2, &b0, &b1, &b2);
-            
-            vec3 otherResult = this->hybridCubicBezier(i0, i1, i2, b0, b1, b2);
-            
-            printf("Ratio is %.5f, %.5f, %.5f.\n", result.r / otherResult.r, result.g / otherResult.g, result.b / otherResult.b);
-            
-            return result;
+            return  result;
         }
     };
 

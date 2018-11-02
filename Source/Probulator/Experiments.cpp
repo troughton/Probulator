@@ -6,6 +6,7 @@
 #include <Probulator/ExperimentHBasis.h>
 #include <Probulator/ExperimentAmbientCube.h>
 #include <Probulator/ExperimentAmbientDice.h>
+#include <Probulator/ExperimentAmbientD20.h>
 
 namespace Probulator
 {
@@ -53,6 +54,9 @@ void addAllExperiments(ExperimentList& experiments)
     
     addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice [Least Squares]", "AD")
         .setInput(experimentMCIS);
+    
+//    addExperiment<ExperimentAmbientDiceIS>(experiments, "Ambient Dice IS [Least Squares]", "ADIS")
+//    .setInput(experimentMCIS);
 
     addExperiment<ExperimentSHL1Geomerics>(experiments, "Spherical Harmonics L1 [Geomerics]", "SHL1G");
 

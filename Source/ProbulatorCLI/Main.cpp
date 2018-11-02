@@ -266,7 +266,7 @@ int main(int argc, char** argv)
 {
 //    return main2(argc, argv);
     
-	const ivec2 outputImageSize(256, 128);
+    const ivec2 outputImageSize(256, 128);
     const u32 sampleCount = 20000;
 
 	if (argc < 2)

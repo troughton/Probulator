@@ -149,4 +149,35 @@ namespace Probulator
 	Image imageDifference(const Image& reference, const Image& image);
 	Image imageSymmetricAbsolutePercentageError(const Image& reference, const Image& image);
 	vec4 imageMeanSquareError(const Image& reference, const Image& image);
+    
+    
+    class ImageDouble : public ImageBase<double>
+    {
+    public:
+        
+        ImageDouble()
+        : ImageBase<double>()
+        {}
+        
+        ImageDouble(u32 width, u32 height)
+        : ImageBase<double>(width, height)
+        {}
+        
+        ImageDouble(ivec2 size)
+        : ImageBase<double>(size.x, size.y)
+        {}
+        
+        double sampleNearest(vec2 uv) const;
+        double sampleBilinear(vec2 uv) const;
+        
+        double* data() { return m_pixels.empty() ? nullptr : &m_pixels[0]; }
+        const double* data() const { return m_pixels.empty() ? nullptr : &m_pixels[0]; }
+        
+        bool readHdr(const char* filename);
+        
+        void writeHdr(const char* filename) const;
+        void writePng(const char* filename) const;
+        
+        void paste(const ImageDouble& src, ivec2 pos);
+    };
 }
