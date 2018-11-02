@@ -16,6 +16,9 @@ namespace Probulator {
         static const u32 triangleIndices[20][3];
         static const vec3 triangleBarycentricNormals[20][3];
         
+        static const float triDerivativeTangentFactors[20][6];
+        static const float triDerivativeBitangentFactors[20][6];
+        
         struct Vertex {
             vec3 value;
             vec3 directionalDerivativeU;
@@ -86,8 +89,11 @@ namespace Probulator {
             return t;
         }
         
-        inline void computeBarycentrics(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, float *b0Out, float *b1Out, float *b2Out) const {
+        inline void computeBarycentrics(vec3 direction, u32 *triIndexOut, u32 *i0Out, u32 *i1Out, u32 *i2Out, float *b0Out, float *b1Out, float *b2Out) const {
             u32 triIndex = this->indexIcosahedronTriangle(direction);
+            
+            *triIndexOut = triIndex;
+            
             u32 i0 = AmbientDice::triangleIndices[triIndex][0];
             u32 i1 = AmbientDice::triangleIndices[triIndex][1];
             u32 i2 = AmbientDice::triangleIndices[triIndex][2];
@@ -105,17 +111,17 @@ namespace Probulator {
             *b2Out = dot(direction, n2);
         }
         
-        vec3 hybridCubicBezier(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2) const;
-        void hybridCubicBezierWeights(u32 i0, u32 i1, u32 i2, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2) const;
+        void hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2) const;
         void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const;
         
         void srbfWeights(vec3 direction, float *weightsOut) const;
         
         inline vec3 evaluateLinear(const vec3& direction) const
         {
+            u32 triIndex;
             u32 i0, i1, i2;
             float b0, b1, b2;
-            this->computeBarycentrics(direction, &i0, &i1, &i2, &b0, &b1, &b2);
+            this->computeBarycentrics(direction, &triIndex, &i0, &i1, &i2, &b0, &b1, &b2);
             
             return b0 * this->vertices[i0].value + b1 * this->vertices[i1].value + b2 * this->vertices[i2].value;
         }
