@@ -33,6 +33,7 @@ public:
         solveForRadiance(data.m_radianceSamples);
         generateRadianceImage(data);
         generateIrradianceImage(data);
+        generateSpecularImage(data);
     }
 
 	void getProperties(std::vector<Property>& outProperties) override
@@ -52,17 +53,17 @@ public:
     void generateLobes()
     {
         std::vector<vec3> sgLobeDirections(m_lobeCount);
-        
+
         m_lobes.resize(m_lobeCount);
         for (u32 lobeIt = 0; lobeIt < m_lobeCount; ++lobeIt)
         {
             sgLobeDirections[lobeIt] = sampleVogelsSphere(lobeIt, m_lobeCount);
-            
+
             m_lobes[lobeIt].p = sgLobeDirections[lobeIt];
             m_lobes[lobeIt].lambda = m_lambda;
             m_lobes[lobeIt].mu = vec3(0.0f);
         }
-        
+
         if (m_ambientLobeEnabled)
         {
             SphericalGaussian lobe;
@@ -71,6 +72,35 @@ public:
             lobe.mu = vec3(0.0f);
             m_lobes.push_back(lobe);
         }
+        
+//        m_lobeCount = 12;
+//        m_lambda = 3.4f;
+//
+//        const float kT = 0.618034f;
+//
+//        const vec3 vertexPositions[12] = {
+//            vec3(1.0, kT, 0.0),
+//            vec3(-1.0, kT, 0.0),
+//            vec3(1.0, -kT, -0.0),
+//            vec3(-1.0, -kT, 0.0),
+//            vec3(0.0, 1.0, kT),
+//            vec3(-0.0, -1.0, kT),
+//            vec3(0.0, 1.0, -kT),
+//            vec3(0.0, -1.0, -kT),
+//            vec3(kT, 0.0, 1.0),
+//            vec3(-kT, 0.0, 1.0),
+//            vec3(kT, -0.0, -1.0),
+//            vec3(-kT, -0.0, -1.0)
+//        };
+//
+//        m_lobes.resize(m_lobeCount);
+//        for (u32 lobeIt = 0; lobeIt < m_lobeCount; ++lobeIt)
+//        {
+//            m_lobes[lobeIt].p = normalize(vertexPositions[lobeIt]);
+//            m_lobes[lobeIt].lambda = m_lambda;
+//            m_lobes[lobeIt].mu = vec3(0.0f);
+//        }
+
     }
 
 protected:
@@ -99,6 +129,42 @@ protected:
             vec3 sampleSg = sgBasisIrradianceFitted(m_lobes, normal);
             pixel = vec4(sampleSg, 1.0f);
         });
+    }
+    
+    void generateSpecularImage(const SharedData& data)
+    {
+        
+        m_specularImage = Image(data.m_outputSize);
+        m_specularImage.forPixels2D([&](vec4& pixel, ivec2 pixelPos)
+                                      {
+                                          
+                                          if (specularFixedNormal) {
+                                              vec3 normal = vec3(0, 1, 0);
+                                              vec3 R = data.m_directionImage.at(pixelPos);
+                                              if (R.y < 0.f) {
+                                                  pixel = vec4(0, 0, 0, 1);
+                                                  return;
+                                              }
+                                              
+                                              vec3 V = reflect(-R, normal);
+                                              
+                                              vec3 sampleSG = vec3(0.f);
+                                              
+                                              for (const SphericalGaussian &lobe : m_lobes) {
+                                                  sampleSG += sgGGXSpecular(lobe, normal, ggxAlpha, V, vec3(1.f));
+                                              }
+                                              pixel = vec4(sampleSG, 1.0f);
+                                          } else {
+                                              vec3 normal = data.m_directionImage.at(pixelPos);
+                                              
+                                              vec3 sampleSG = vec3(0.f);
+                                              
+                                              for (const SphericalGaussian &lobe : m_lobes) {
+                                                  sampleSG += sgGGXSpecular(lobe, normal, ggxAlpha, normal, vec3(1.f));
+                                              }
+                                              pixel = vec4(sampleSG, 1.0f);
+                                          }
+                                      });
     }
 };
 

@@ -52,7 +52,12 @@ void addAllExperiments(ExperimentList& experiments)
 		.setSolveType(ExperimentAmbientCube::SolveType::Projection)
 		.setInput(experimentMCIS);
     
-    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice [Least Squares]", "AD")
+    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice Bezier [Least Squares]", "AD")
+        .setDiceType(AmbientDiceTypeBezier)
+        .setInput(experimentMCIS);
+    
+    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice SRBF [Least Squares]", "ADRBF")
+        .setDiceType(AmbientDiceTypeSRBF)
         .setInput(experimentMCIS);
     
 //    addExperiment<ExperimentAmbientDiceIS>(experiments, "Ambient Dice IS [Least Squares]", "ADIS")

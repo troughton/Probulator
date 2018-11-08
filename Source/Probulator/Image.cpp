@@ -77,13 +77,13 @@ namespace Probulator
     
     vec4 Image::sampleBilinear(vec2 uv) const
     {
-        vec2 pixelUV = uv * (vec2)m_size - vec2(0.5);
+        vec2 pixelUV = uv * (vec2)m_size;
         vec2 fMinPixel = floor(pixelUV);
         
         ivec2 minPixel = clamp((ivec2)fMinPixel, ivec2(0), m_size - 1);
         ivec2 maxPixel = clamp((ivec2)ceil(pixelUV), ivec2(0), m_size - 1);
         
-        vec2 weight = pixelUV - fMinPixel;
+        vec2 weight = pixelUV - (vec2)minPixel;
         
         return at(minPixel) * (1 - weight.x) * (1 - weight.y) +
                at(ivec2(minPixel.x, maxPixel.y)) * (1 - weight.x) * weight.y +

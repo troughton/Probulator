@@ -7,6 +7,8 @@
 
 #include "ExperimentAmbientD20.h"
 
+#include <chrono>
+
 namespace Probulator {
     
     const float AmbientDice::kT = 0.618034f;
@@ -498,8 +500,10 @@ namespace Probulator {
             
             float cos2 = dotProduct * dotProduct;
             float cos4 = cos2 * cos2;
-            
+
             float weight = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+
+//            float weight = 0.6f * exp(3.1f * (dotProduct - 1.f));
             result += weight * this->vertices[index].value;
         }
         
@@ -661,61 +665,54 @@ namespace Probulator {
         return ambientDice;
     }
     
-//    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance)
+//    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(ImageBase<vec3>& directions, const Image& irradiance)
 //    {
 //        using namespace Eigen;
 //
 //        AmbientDice ambientDice;
 //
-//        const u64 sampleCount = directions.getPixelCount();
-//
 //        MatrixXf moments = MatrixXf::Zero(36, 3);
 //
-//        for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
-//        {
-//            const vec3& direction = directions.at(sampleIt);
-//            const vec4& colour = irradiance.at(sampleIt);
+//        const ivec2 imageSize = directions.getSize();
+//        directions.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
+//                                          {
+//                                              float texelArea = latLongTexelArea(pixelPos, imageSize);
+////                                              float texelArea = 1.f / directions.getPixelCount();
+//
+//            const vec4& colour = irradiance.at(pixelPos);
 //
 //            u32 i0, i1, i2;
 //            AmbientDice::VertexWeights weights[3];
 //            ambientDice.hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
 //
-//            moments(3 * i0 + 0, 0) += weights[0].value * colour.r / float(sampleCount);
-//            moments(3 * i0 + 1, 0) += weights[0].directionalDerivativeU * colour.r / float(sampleCount);
-//            moments(3 * i0 + 2, 0) += weights[0].directionalDerivativeV * colour.r / float(sampleCount);
-//
-//            moments(3 * i1 + 0, 0) += weights[1].value * colour.r / float(sampleCount);
-//            moments(3 * i1 + 1, 0) += weights[1].directionalDerivativeU * colour.r / float(sampleCount);
-//            moments(3 * i1 + 2, 0) += weights[1].directionalDerivativeV * colour.r / float(sampleCount);
-//
-//            moments(3 * i2 + 0, 0) += weights[2].value * colour.r / float(sampleCount);
-//            moments(3 * i2 + 1, 0) += weights[2].directionalDerivativeU * colour.r / float(sampleCount);
-//            moments(3 * i2 + 2, 0) += weights[2].directionalDerivativeV * colour.r / float(sampleCount);
-//
-//            moments(3 * i0 + 0, 1) += weights[0].value * colour.g / float(sampleCount);
-//            moments(3 * i0 + 1, 1) += weights[0].directionalDerivativeU * colour.g / float(sampleCount);
-//            moments(3 * i0 + 2, 1) += weights[0].directionalDerivativeV * colour.g / float(sampleCount);
-//
-//            moments(3 * i1 + 0, 1) += weights[1].value * colour.g / float(sampleCount);
-//            moments(3 * i1 + 1, 1) += weights[1].directionalDerivativeU * colour.g / float(sampleCount);
-//            moments(3 * i1 + 2, 1) += weights[1].directionalDerivativeV * colour.g / float(sampleCount);
-//
-//            moments(3 * i2 + 0, 1) += weights[2].value * colour.g / float(sampleCount);
-//            moments(3 * i2 + 1, 1) += weights[2].directionalDerivativeU * colour.g / float(sampleCount);
-//            moments(3 * i2 + 2, 1) += weights[2].directionalDerivativeV * colour.g / float(sampleCount);
-//
-//            moments(3 * i0 + 0, 2) += weights[0].value * colour.b / float(sampleCount);
-//            moments(3 * i0 + 1, 2) += weights[0].directionalDerivativeU * colour.b / float(sampleCount);
-//            moments(3 * i0 + 2, 2) += weights[0].directionalDerivativeV * colour.b / float(sampleCount);
-//
-//            moments(3 * i1 + 0, 2) += weights[1].value * colour.b / float(sampleCount);
-//            moments(3 * i1 + 1, 2) += weights[1].directionalDerivativeU * colour.b / float(sampleCount);
-//            moments(3 * i1 + 2, 2) += weights[1].directionalDerivativeV * colour.b / float(sampleCount);
-//
-//            moments(3 * i2 + 0, 2) += weights[2].value * colour.b / float(sampleCount);
-//            moments(3 * i2 + 1, 2) += weights[2].directionalDerivativeU * colour.b / float(sampleCount);
-//            moments(3 * i2 + 2, 2) += weights[2].directionalDerivativeV * colour.b / float(sampleCount);
-//        }
+//                                              moments(3 * i0 + 0, 0) += weights[0].value * colour.r * texelArea;
+//                                              moments(3 * i0 + 1, 0) += weights[0].directionalDerivativeU * colour.r * texelArea;
+//                                              moments(3 * i0 + 2, 0) += weights[0].directionalDerivativeV * colour.r * texelArea;
+//                                              moments(3 * i1 + 0, 0) += weights[1].value * colour.r * texelArea;
+//                                              moments(3 * i1 + 1, 0) += weights[1].directionalDerivativeU * colour.r * texelArea;
+//                                              moments(3 * i1 + 2, 0) += weights[1].directionalDerivativeV * colour.r * texelArea;
+//                                              moments(3 * i2 + 0, 0) += weights[2].value * colour.r * texelArea;
+//                                              moments(3 * i2 + 1, 0) += weights[2].directionalDerivativeU * colour.r * texelArea;
+//                                              moments(3 * i2 + 2, 0) += weights[2].directionalDerivativeV * colour.r * texelArea;
+//                                              moments(3 * i0 + 0, 1) += weights[0].value * colour.g * texelArea;
+//                                              moments(3 * i0 + 1, 1) += weights[0].directionalDerivativeU * colour.g * texelArea;
+//                                              moments(3 * i0 + 2, 1) += weights[0].directionalDerivativeV * colour.g * texelArea;
+//                                              moments(3 * i1 + 0, 1) += weights[1].value * colour.g * texelArea;
+//                                              moments(3 * i1 + 1, 1) += weights[1].directionalDerivativeU * colour.g * texelArea;
+//                                              moments(3 * i1 + 2, 1) += weights[1].directionalDerivativeV * colour.g * texelArea;
+//                                              moments(3 * i2 + 0, 1) += weights[2].value * colour.g * texelArea;
+//                                              moments(3 * i2 + 1, 1) += weights[2].directionalDerivativeU * colour.g * texelArea;
+//                                              moments(3 * i2 + 2, 1) += weights[2].directionalDerivativeV * colour.g * texelArea;
+//                                              moments(3 * i0 + 0, 2) += weights[0].value * colour.b * texelArea;
+//                                              moments(3 * i0 + 1, 2) += weights[0].directionalDerivativeU * colour.b * texelArea;
+//                                              moments(3 * i0 + 2, 2) += weights[0].directionalDerivativeV * colour.b * texelArea;
+//                                              moments(3 * i1 + 0, 2) += weights[1].value * colour.b * texelArea;
+//                                              moments(3 * i1 + 1, 2) += weights[1].directionalDerivativeU * colour.b * texelArea;
+//                                              moments(3 * i1 + 2, 2) += weights[1].directionalDerivativeV * colour.b * texelArea;
+//                                              moments(3 * i2 + 0, 2) += weights[2].value * colour.b * texelArea;
+//                                              moments(3 * i2 + 1, 2) += weights[2].directionalDerivativeU * colour.b * texelArea;
+//                                              moments(3 * i2 + 2, 2) += weights[2].directionalDerivativeV * colour.b * texelArea;
+//                                          });
 //
 //        MatrixXf gram;
 //        gram.resize(36, 36);
@@ -725,11 +722,11 @@ namespace Probulator {
 //            {
 //                float integral = 0.f;
 //
-//                for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
-//                {
-//                    float allWeights[36] = { 0.f };
+//                directions.forPixels2D([&](const vec3& direction, ivec2 pixelPos) {
+//                    float texelArea = latLongTexelArea(pixelPos, imageSize);
+////                    float texelArea = 1.f / directions.getPixelCount();
 //
-//                    const vec3& direction = directions.at(sampleIt);
+//                    float allWeights[36] = { 0.f };
 //
 //                    u32 i0, i1, i2;
 //                    AmbientDice::VertexWeights weights[3];
@@ -747,10 +744,10 @@ namespace Probulator {
 //                    allWeights[3 * i2 + 1] = weights[2].directionalDerivativeU;
 //                    allWeights[3 * i2 + 2] = weights[2].directionalDerivativeV;
 //
-//                    integral += allWeights[lobeAIt] * allWeights[lobeBIt];
-//                }
+//                    integral += allWeights[lobeAIt] * allWeights[lobeBIt] * texelArea;
+//                });
 //
-//                integral *= /* 4 * M_PI */ 1.f / float(sampleCount);
+////                integral *= /* 4 * M_PI */ 1.f / float(sampleCount);
 //
 //                gram(lobeAIt, lobeBIt) = integral;
 //                gram(lobeBIt, lobeAIt) = integral;
@@ -784,7 +781,7 @@ namespace Probulator {
 //        return ambientDice;
 //    }
     
-    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance)
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(ImageBase<vec3>& directions, const Image& irradiance)
     {
         using namespace Eigen;
 
@@ -841,7 +838,7 @@ namespace Probulator {
         return ambientDice;
     }
     
-    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresSRBF(const ImageBase<vec3>& directions, const Image& irradiance)
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresSRBF(ImageBase<vec3>& directions, const Image& irradiance)
     {
         using namespace Eigen;
 
@@ -1012,22 +1009,55 @@ namespace Probulator {
     
     void ExperimentAmbientDice::run(SharedData& data)
     {
-//        compareResponseImages(data);
-        AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_radianceImage);
-        AmbientDice ambientDice = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
-
+        
         m_radianceImage = Image(data.m_outputSize);
+        m_specularImage = Image(data.m_outputSize);
         m_irradianceImage = Image(data.m_outputSize);
-
+        
+//        compareResponseImages(data);
+        
+        if (m_diceType == AmbientDiceTypeBezier) {
+            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_radianceImage);
+            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_specularImage);
+            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
+        
+//        float radianceFactor = 1.f - sqrt(ggxAlpha);
+//        float irradianceFactor = 1.f - radianceFactor;
+//        
+//        for (u32 i = 0; i < 12; i += 1) {
+//            
+//            ambientDiceSpecular.vertices[i].value = ambientDiceRadiance.vertices[i].value * radianceFactor + ambientDice.vertices[i].value * irradianceFactor;
+//            ambientDiceSpecular.vertices[i].directionalDerivativeU = ambientDiceRadiance.vertices[i].directionalDerivativeU * radianceFactor + ambientDice.vertices[i].directionalDerivativeU * irradianceFactor;
+//            ambientDiceSpecular.vertices[i].directionalDerivativeV = ambientDiceRadiance.vertices[i].directionalDerivativeV * radianceFactor + ambientDice.vertices[i].directionalDerivativeV * irradianceFactor;
+//        }
+        
         data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                       {
                                           vec3 sampleRadiance = ambientDiceRadiance.evaluateBezier(direction);
-                                          
                                           m_radianceImage.at(pixelPos) = vec4(sampleRadiance, 1.0f);
                                           
-                                          vec3 sampleIrradiance = ambientDice.evaluateBezier(direction);
-                                          
+                                          vec3 sampleIrradiance = ambientDiceIrradiance.evaluateBezier(direction);
                                           m_irradianceImage.at(pixelPos) = vec4(sampleIrradiance, 1.0f);
+                                          
+                                          vec3 sampleSpecular = ambientDiceSpecular.evaluateBezier(direction);
+                                          m_specularImage.at(pixelPos) = vec4(sampleSpecular, 1.0f);
                                       });
+        } else /* if (m_diceType == AmbientDiceTypeSRBF) */ {
+            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_radianceImage);
+            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_specularImage);
+            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_irradianceImage);
+            
+            data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
+                                              {
+                                                  vec3 sampleRadiance = ambientDiceRadiance.evaluateSRBF(direction);
+                                                  m_radianceImage.at(pixelPos) = vec4(sampleRadiance, 1.0f);
+                                                  
+                                                  vec3 sampleIrradiance = ambientDiceIrradiance.evaluateSRBF(direction);
+                                                  m_irradianceImage.at(pixelPos) = vec4(sampleIrradiance, 1.0f);
+                                                  
+                                                  vec3 sampleSpecular = ambientDiceSpecular.evaluateSRBF(direction);
+                                                  m_specularImage.at(pixelPos) = vec4(sampleSpecular, 1.0f);
+                                              });
+        }
     }
 }

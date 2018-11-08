@@ -1,5 +1,7 @@
 #include "SphericalGaussian.h"
 
+#include <stdio.h>
+
 namespace Probulator
 {
 	float sgIntegral(float lambda)
@@ -84,4 +86,99 @@ namespace Probulator
         
         return result * lightingLobe.mu * sgIntegral(lightingLobe.lambda);
     }
+    
+    
+    inline SphericalGaussian DistributionTermSG(vec3 direction, float roughness)
+    {
+        float m2 = roughness * roughness;
+        SphericalGaussian distribution;
+        distribution.mu = vec3(1.f / (pi * m2));
+        distribution.p = direction;
+        distribution.lambda = 2.f / m2;
+        
+        return distribution;
+    }
+    
+    AnisotropicSphericalGaussian sgWarpDistribution(const SphericalGaussian &sg, vec3 view) {
+        AnisotropicSphericalGaussian warp;
+        
+        // Generate any orthonormal basis with Z pointing in the
+        // direction of the reflected view vector
+        warp.basisZ = reflect(-view, sg.p);
+        
+        constructOrthonormalBasis(warp.basisZ, &warp.basisX, &warp.basisY);
+        
+        float dotDirO = max(dot(view, sg.p), 0.0001f);
+        
+        // Second derivative of the sharpness with respect to how
+        // far we are from basis Axis direction
+        warp.lambdaX = sg.lambda / (8.0f * dotDirO * dotDirO);
+        warp.lambdaY = sg.lambda / 8.0f;
+        
+        warp.mu = sg.mu;
+        
+        return warp;
+    }
+    
+    vec3 sgGGXSpecular(const SphericalGaussian &sg, vec3 normal, float roughness, vec3 view, vec3 f0) {
+        // Create an SG that approximates the NDF
+        SphericalGaussian ndf = DistributionTermSG(normal, roughness);
+        
+        // Apply a warpring operation that will bring the SG from
+        // the half-angle domain the the the lighting domain.
+        AnisotropicSphericalGaussian warpedNDF = sgWarpDistribution(ndf, view);
+        
+        // Convolve the NDF with the light
+        vec3 output = warpedNDF.convolvedWithSG(sg);
+        
+        // Parameters needed for evaluating the visibility term
+        vec3 warpDir = warpedNDF.basisZ;
+        float nDotL = saturate(dot(normal, warpDir));
+        float nDotV = saturate(dot(normal, view));
+        vec3 h = normalize(warpDir + view);
+        
+        // Visibility term
+        output *= V_SmithGGXCorrelated(nDotL, nDotV, roughness);
+        
+        // Fresnel
+        output *= F_Schlick(f0, 1.f, dot(warpDir, h));
+        
+        // Cosine term
+        output *= nDotL;
+        
+        return output; // max(output, 0.0f);
+    }
+    
+    vec3 AnisotropicSphericalGaussian::evaluate(vec3 dir) const {
+        float sTerm = saturate(dot(this->basisZ, dir));
+        float lambdaTerm = this->lambdaX * dot(dir, this->basisX)
+        * dot(dir, this->basisX);
+        float muTerm = this->lambdaY * dot(dir, this->basisY)
+        * dot(dir, this->basisY);
+        return this->mu * sTerm * exp(-lambdaTerm - muTerm);
+    }
+    
+    vec3 AnisotropicSphericalGaussian::convolvedWithSG(const SphericalGaussian sg) const {
+        // The ASG paper specifes an isotropic SG as
+        // exp(2 * nu * (dot(v, axis) - 1)),
+        // so we must divide our SG sharpness by 2 in order
+        // to get the nup parameter expected by the ASG formula
+        float nu = sg.lambda * 0.5f;
+        
+        AnisotropicSphericalGaussian convolveASG;
+        convolveASG.basisX = this->basisX;
+        convolveASG.basisY = this->basisY;
+        convolveASG.basisZ = this->basisZ;
+        
+        convolveASG.lambdaX = (nu * this->lambdaX) /
+        (nu + this->lambdaX);
+        convolveASG.lambdaY = (nu * this->lambdaY) /
+        (nu + this->lambdaY);
+        
+        convolveASG.mu = vec3(pi / sqrt((nu + this->lambdaX) * (nu + this->lambdaY)));
+        
+        vec3 asgResult = convolveASG.evaluate(sg.p);
+        return asgResult * sg.mu * this->mu;
+    }
+
 }

@@ -30,9 +30,10 @@ void generateReportHtml(const ExperimentList& experiments, const char* filename)
 	f << "<!DOCTYPE html>" << std::endl;
 	f << "<html>" << std::endl;
 	f << "<table>" << std::endl;
-	f << "<tr><td>Radiance</td><td>Irradiance</td>";
+	f << "<tr><td>Radiance</td><td>Specular</td><td>Irradiance</td>";
 	if (referenceMode)
 	{
+        f << "<td>Specular Error (sMAPE)</td>";
 		f << "<td>Irradiance Error (sMAPE)</td>";
 	}
 	f << "<td>Mode</td></tr>" << std::endl;
@@ -45,6 +46,11 @@ void generateReportHtml(const ExperimentList& experiments, const char* filename)
 		radianceFilename << "radiance" << it->m_suffix << ".png";
 		it->m_radianceImage.writePng(radianceFilename.str().c_str());
 
+        std::ostringstream specularFilename;
+        specularFilename << "specular" << it->m_suffix << ".png";
+        it->m_specularImage.writePng(specularFilename.str().c_str());
+
+        
 		std::ostringstream irradianceFilename;
 		irradianceFilename << "irradiance" << it->m_suffix << ".png";
 		it->m_irradianceImage.writePng(irradianceFilename.str().c_str());
@@ -61,6 +67,17 @@ void generateReportHtml(const ExperimentList& experiments, const char* filename)
 			f << "RMS: " << sqrtf(mseScalar);
 		}
 		f << "</td>";
+        
+        f << "<td valign=\"top\"><img src=\"" << specularFilename.str() << "\"/>";
+        if (referenceMode && referenceMode != it.get())
+        {
+            f << "<br/>";
+            vec4 mse = imageMeanSquareError(referenceMode->m_specularImage, it->m_specularImage);
+            float mseScalar = dot(vec3(1.0f/3.0f), (vec3)mse);
+            f << "MSE: " << mseScalar << " ";
+            f << "RMS: " << sqrtf(mseScalar);
+        }
+        f << "</td>";
 
 		f << "<td valign=\"top\"><img src=\"" << irradianceFilename.str() << "\"/>";
 		if (referenceMode && referenceMode != it.get())
@@ -77,18 +94,35 @@ void generateReportHtml(const ExperimentList& experiments, const char* filename)
 		{
 			if (referenceMode != it.get())
 			{
-				std::ostringstream irradianceErrorFilename;
-				irradianceErrorFilename << "irradianceError" << it->m_suffix << ".png";
-				it->m_radianceImage.writePng(irradianceErrorFilename.str().c_str());
-
-				Image errorImage = imageSymmetricAbsolutePercentageError(referenceMode->m_irradianceImage, it->m_irradianceImage);
-				for (vec4& pixel : errorImage)
-				{
-					pixel.w = 1.0f;
-				}
-				errorImage.writePng(irradianceErrorFilename.str().c_str());
-
-				f << "<td valign=\"top\"><img src=\"" << irradianceErrorFilename.str() << "\"/></td>";
+                {
+                    std::ostringstream specularErrorFilename;
+                    specularErrorFilename << "specularError" << it->m_suffix << ".png";
+                    it->m_radianceImage.writePng(specularErrorFilename.str().c_str());
+                    
+                    Image errorImage = imageSymmetricAbsolutePercentageError(referenceMode->m_specularImage, it->m_specularImage);
+                    for (vec4& pixel : errorImage)
+                    {
+                        pixel.w = 1.0f;
+                    }
+                    errorImage.writePng(specularErrorFilename.str().c_str());
+                    
+                    f << "<td valign=\"top\"><img src=\"" << specularErrorFilename.str() << "\"/></td>";
+                }
+                
+                {
+                    std::ostringstream irradianceErrorFilename;
+                    irradianceErrorFilename << "irradianceError" << it->m_suffix << ".png";
+                    it->m_radianceImage.writePng(irradianceErrorFilename.str().c_str());
+                    
+                    Image errorImage = imageSymmetricAbsolutePercentageError(referenceMode->m_irradianceImage, it->m_irradianceImage);
+                    for (vec4& pixel : errorImage)
+                    {
+                        pixel.w = 1.0f;
+                    }
+                    errorImage.writePng(irradianceErrorFilename.str().c_str());
+                    
+                    f << "<td valign=\"top\"><img src=\"" << irradianceErrorFilename.str() << "\"/></td>";
+                }
 			}
 			else
 			{

@@ -20,6 +20,18 @@ namespace Probulator
             return mu * this->weight(direction);
         }
 	};
+    
+    struct AnisotropicSphericalGaussian {
+        vec3 mu;
+        vec3 basisZ;
+        vec3 basisX;
+        vec3 basisY;
+        float lambdaX;
+        float lambdaY;
+        
+        vec3 evaluate(vec3 direction) const;
+        vec3 convolvedWithSG(const SphericalGaussian sg) const;
+    };
 
 	// Calculates an integral of a product of two SGs over a sphere
 	vec3 sgDot(const SphericalGaussian& a, const SphericalGaussian& b);
@@ -54,4 +66,6 @@ namespace Probulator
 
     // Compute the irradiance in a given direction using a curve fit.
     vec3 sgIrradianceFitted(const SphericalGaussian& lightingLobe, const vec3& normal);
+    
+    vec3 sgGGXSpecular(const SphericalGaussian &sg, vec3 normal, float roughness, vec3 view, vec3 f0);
 }

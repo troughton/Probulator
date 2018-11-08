@@ -15,3 +15,6 @@ namespace Probulator
 	typedef int32_t s32;
 	typedef int64_t s64;
 }
+
+const float ggxAlpha = 0.1f;
+const bool specularFixedNormal = false;

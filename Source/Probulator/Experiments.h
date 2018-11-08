@@ -217,6 +217,7 @@ public:
     // Common experiment outputs
 
     Image m_radianceImage;
+    Image m_specularImage;
     Image m_irradianceImage;
     float m_irradianceMax = 0.0f;
 };

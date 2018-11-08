@@ -278,4 +278,90 @@ namespace Probulator
 	{
 		return dot(vec3(0.2126f, 0.7152f, 0.0722f), color);
 	}
+    
+    // Building an Orthonormal Basis, Revisited. Duff et. al., Pixar. http://jcgt.org/published/0006/01/01/paper.pdf
+    inline void constructOrthonormalBasis(const vec3 &n, vec3 *b1, vec3 *b2) {
+        float sign = copysign(1.0f, n.z);
+        const float a = -1.0f / (sign + n.z);
+        const float b = n.x * n.y * a;
+        *b1 = vec3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
+        *b2 = vec3(b, sign + n.y * n.y * a, -n.y);
+    }
+
+    inline vec3 F_Schlick(const vec3 &f0, float f90, float u) {
+        return f0 + (f90 - f0) * pow(1.f - u, 5.f);
+    }
+    
+    // Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs, http://jcgt.org/published/0003/02/03/paper.pdf
+    inline float SmithLambda(float cosThetaM, float alphaG) {
+        float alphaG2 = alphaG * alphaG;
+        
+        float cosThetaM2 = cosThetaM * cosThetaM;
+        float sinThetaM2 = 1 - cosThetaM2;
+        
+        return 0.5f * (-1.f + sqrt(1.f + alphaG2 * sinThetaM2 / cosThetaM2));
+    }
+    
+    // Multiple-Scattering Microfacet BSDFs with the Smith Model
+    // Heitz et. al.
+    // https://jo.dreggn.org/home/2016_microfacets.pdf
+    // Incoming is the view direction and outgoing is the light direction
+    inline float SmithGGXMaskingShadowingG1Reflection(vec3 incoming, vec3 outgoing, vec3 microfacetNormal, float alpha) {
+        float VdotH = dot(incoming, microfacetNormal);
+        return (VdotH >= 0.f ? 1.f : -1.f) / (1.f + SmithLambda(VdotH, alpha));
+    }
+    
+    inline float V_SmithGGXCorrelated(float NdotL, float NdotV, float alphaG) {
+        float alphaG2 = alphaG * alphaG;
+        
+        float Lambda_GGXV = NdotL * sqrt((-NdotV * alphaG2 + NdotV) * NdotV + alphaG2);
+        
+        float Lambda_GGXL = NdotV * sqrt((-NdotL * alphaG2 + NdotL) * NdotL + alphaG2);
+        
+        return 0.5f / (max(Lambda_GGXV + Lambda_GGXL, 1e-6f));
+    }
+    
+    // Multiple-Scattering Microfacet BSDFs with the Smith Model
+    // Heitz et. al.
+    // https://jo.dreggn.org/home/2016_microfacets.pdf
+    // Incoming is the view direction and outgoing is the light direction
+    inline float SmithGGXMaskingShadowingG2OverG1Reflection(vec3 incoming, vec3 outgoing, vec3 microfacetNormal, float alpha) {
+        float VdotH = dot(incoming, microfacetNormal);
+        float LdotH = dot(outgoing, microfacetNormal);
+        
+        float G1Inverse = 1.f + SmithLambda(incoming.z, alpha);
+        
+        float numerator = (VdotH > 0 ? 1.f : 0.f) * (LdotH > 0 ? 1.f : 0.f);
+        float denominator = G1Inverse + SmithLambda(outgoing.z, alpha);
+        return numerator / (denominator * G1Inverse);
+    }
+    
+    // Eric Heitz. A Simpler and Exact Sampling Routine for the GGX Distribution of Visible Normals.
+    // [Research Report] Unity Technologies. 2017. <hal-01509746>
+    // https://developer.blender.org/D3461
+    inline vec3 sampleGGXVNDF(const vec3 &V_, float alpha_x, float alpha_y, float U1, float U2) {
+        // stretch view
+        vec3 V = normalize(vec3(alpha_x * V_.x, alpha_y * V_.y, V_.z));
+        float r = sqrt(U1);
+        
+        // Handle special case of normal incidence and/or near-specularity.
+        //    if (V.z >= 0.9999f) {
+        //        return vec3(0, 0, 1);
+        //    }
+        
+        // orthonormal basis
+        vec3 T1, T2;
+        constructOrthonormalBasis(V, &T1, &T2);
+        
+        // sample point with polar coordinates (r, phi)
+        float a = 1.0 / (1.0 + V.z);
+        float phi = (U2<a) ? U2/a * pi : pi + (U2-a)/(1.0-a) * pi;
+        float P1 = r*cos(phi);
+        float P2 = r*sin(phi)*((U2<a) ? 1.0 : V.z);
+        // compute normal
+        vec3 N = P1*T1 + P2*T2 + sqrt(max(0.0f, 1.0f - P1*P1 - P2*P2))*V;
+        // unstretch
+        N = normalize(vec3(alpha_x*N.x, alpha_y*N.y, max(0.0f, N.z)));
+        return N;
+    }
 }

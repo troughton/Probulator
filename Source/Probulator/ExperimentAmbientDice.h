@@ -150,6 +150,11 @@ namespace Probulator {
         }
     };
 
+    enum AmbientDiceType {
+        AmbientDiceTypeLinear,
+        AmbientDiceTypeBezier,
+        AmbientDiceTypeSRBF
+    };
     
     class ExperimentAmbientDice : public Experiment
     {
@@ -158,10 +163,18 @@ namespace Probulator {
         static AmbientDice solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceRunningAverageSRBF(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance);
-        static AmbientDice solveAmbientDiceLeastSquares(const ImageBase<vec3>& directions, const Image& irradiance);
-        static AmbientDice solveAmbientDiceLeastSquaresSRBF(const ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceLeastSquares(ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceLeastSquaresSRBF(ImageBase<vec3>& directions, const Image& irradiance);
         
         void run(SharedData& data) override;
+        
+        ExperimentAmbientDice& setDiceType(AmbientDiceType diceType) {
+            this->m_diceType = diceType;
+            return *this;
+        }
+        
+    private:
+        AmbientDiceType m_diceType = AmbientDiceTypeBezier;
     };
     
 }
