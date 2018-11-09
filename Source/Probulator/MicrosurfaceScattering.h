@@ -17,7 +17,9 @@ public:
 	// height CDF	
 	virtual float C1(const float h) const=0; 
 	// inverse of the height CDF
-	virtual float invC1(const float U) const=0; 
+	virtual float invC1(const float U) const=0;
+    
+    virtual ~MicrosurfaceHeight() {}
 };
 
 /* Uniform height distribution in [-1, 1] */
@@ -29,7 +31,7 @@ public:
 	// height CDF	
 	virtual float C1(const float h) const; 
 	// inverse of the height CDF
-	virtual float invC1(const float U) const; 
+	virtual float invC1(const float U) const;
 };
 
 /* Gaussian height distribution N(0,1) */
@@ -54,6 +56,9 @@ public:
 	MicrosurfaceSlope(const float alpha_x=1.0f, const float alpha_y=1.0f)
 		: m_alpha_x(alpha_x), m_alpha_y(alpha_y)
 	{}
+    
+    
+    virtual ~MicrosurfaceSlope() {}
 
 public:
 	// roughness
@@ -142,7 +147,7 @@ public:
 		: static_cast<MicrosurfaceSlope*>(new MicrosurfaceSlopeGGX(alpha_x, alpha_y)))
 	{}
 		
-	~Microsurface() 
+	virtual ~Microsurface() 
 	{
 		delete m_microsurfaceheight; 
 		delete m_microsurfaceslope;

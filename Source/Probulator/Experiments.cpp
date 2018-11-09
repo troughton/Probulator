@@ -60,8 +60,8 @@ void addAllExperiments(ExperimentList& experiments)
         .setDiceType(AmbientDiceTypeSRBF)
         .setInput(experimentMCIS);
     
-//    addExperiment<ExperimentAmbientDiceIS>(experiments, "Ambient Dice IS [Least Squares]", "ADIS")
-//    .setInput(experimentMCIS);
+    addExperiment<ExperimentAmbientDiceIS>(experiments, "Ambient Dice IS [Least Squares]", "ADIS")
+    .setInput(experimentMCIS);
 
     addExperiment<ExperimentSHL1Geomerics>(experiments, "Spherical Harmonics L1 [Geomerics]", "SHL1G");
 

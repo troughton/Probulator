@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Probulator/Experiments.h>
+#include <Eigen/Eigen>
 
 namespace Probulator {
     
@@ -19,6 +20,9 @@ namespace Probulator {
         
         static const float triDerivativeTangentFactors[20][6];
         static const float triDerivativeBitangentFactors[20][6];
+        
+        static const double gramMatrixBezier[36][36];
+        static const double gramMatrixSRBF[12][12];
         
         struct Vertex {
             vec3 value;
@@ -64,8 +68,7 @@ namespace Probulator {
             *i2 = vertCSelect ? indexC : indexCFlipped;
         }
         
-        inline u32 indexIcosahedronTriangle(const vec3& direction) const
-        {
+        inline static u32 indexIcosahedronTriangle(const vec3& direction) {
             float kT = 0.618034f;
             float kT2 = kT * kT;
             
@@ -90,8 +93,8 @@ namespace Probulator {
             return t;
         }
         
-        inline void computeBarycentrics(vec3 direction, u32 *triIndexOut, u32 *i0Out, u32 *i1Out, u32 *i2Out, float *b0Out, float *b1Out, float *b2Out) const {
-            u32 triIndex = this->indexIcosahedronTriangle(direction);
+        inline static void computeBarycentrics(vec3 direction, u32 *triIndexOut, u32 *i0Out, u32 *i1Out, u32 *i2Out, float *b0Out, float *b1Out, float *b2Out) {
+            u32 triIndex = AmbientDice::indexIcosahedronTriangle(direction);
             
             *triIndexOut = triIndex;
             
@@ -112,10 +115,13 @@ namespace Probulator {
             *b2Out = dot(direction, n2);
         }
         
-        void hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2) const;
-        void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) const;
+        static Eigen::MatrixXd computeGramMatrixBezier();
+        static Eigen::MatrixXd computeGramMatrixSRBF();
         
-        void srbfWeights(vec3 direction, float *weightsOut) const;
+        static void hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2);
+        static void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out);
+        
+        static void srbfWeights(vec3 direction, float *weightsOut);
         
         inline vec3 evaluateLinear(const vec3& direction) const
         {

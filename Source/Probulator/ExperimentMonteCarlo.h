@@ -130,7 +130,7 @@ namespace Probulator {
                                                       });
             
             
-            const u64 m_hemisphereSampleCount = 8192;
+            const u64 m_hemisphereSampleCount = 1024;
             
             Microsurface *microsurface = new MicrosurfaceConductor(false, false, ggxAlpha, ggxAlpha);
             
