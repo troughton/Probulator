@@ -5,10 +5,13 @@
 
 namespace Probulator {
     
+    typedef long double float80;
+    
     struct AmbientDice
     {
-        static const float kT;
-        static const float kT2;
+        
+        static const float80 kT;
+        static const float80 kT2;
         
         static const vec3 vertexPositions[12];
         static const vec3 srbfNormalisedVertexPositions[6];
@@ -30,17 +33,18 @@ namespace Probulator {
             vec3 directionalDerivativeV;
         };
         
+        template<typename T>
         struct VertexWeights {
-            float value;
-            float directionalDerivativeU;
-            float directionalDerivativeV;
+            T value;
+            T directionalDerivativeU;
+            T directionalDerivativeV;
         };
         
         Vertex vertices[12];
         
         inline void indexIcosahedron(const vec3& direction, u32 *i0, u32 *i1, u32 *i2) const
         {
-            float kT = 0.618034f;
+            float kT = AmbientDice::kT;
             float kT2 = kT * kT;
             
             ivec3 octantBit = ivec3(direction.x < 0 ? 1 : 0,
@@ -68,8 +72,9 @@ namespace Probulator {
             *i2 = vertCSelect ? indexC : indexCFlipped;
         }
         
-        inline static u32 indexIcosahedronTriangle(const vec3& direction) {
-            float kT = 0.618034f;
+        template <typename T>
+        inline static u32 indexIcosahedronTriangle(const glm::tvec3<T, glm::highp>& direction) {
+            float kT = AmbientDice::kT;
             float kT2 = kT * kT;
             
             ivec3 octantBit = ivec3(direction.x < 0 ? 1 : 0,
@@ -93,7 +98,8 @@ namespace Probulator {
             return t;
         }
         
-        inline static void computeBarycentrics(vec3 direction, u32 *triIndexOut, u32 *i0Out, u32 *i1Out, u32 *i2Out, float *b0Out, float *b1Out, float *b2Out) {
+        template <typename T>
+        inline static void computeBarycentrics(vec3 direction, u32 *triIndexOut, u32 *i0Out, u32 *i1Out, u32 *i2Out, T *b0Out, T *b1Out, T *b2Out) {
             u32 triIndex = AmbientDice::indexIcosahedronTriangle(direction);
             
             *triIndexOut = triIndex;
@@ -118,10 +124,15 @@ namespace Probulator {
         static Eigen::MatrixXd computeGramMatrixBezier();
         static Eigen::MatrixXd computeGramMatrixSRBF();
         
-        static void hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights *w0, VertexWeights *w1, VertexWeights *w2);
-        static void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out);
         
-        static void srbfWeights(vec3 direction, float *weightsOut);
+        template <typename T>
+        static void hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights<T> *w0, VertexWeights<T> *w1, VertexWeights<T> *w2);
+        
+        template <typename T>
+        static void hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights<T> *w0Out, VertexWeights<T> *w1Out, VertexWeights<T> *w2Out);
+        
+        template <typename T>
+        static void srbfWeights(vec3 direction, T *weightsOut);
         
         inline vec3 evaluateLinear(const vec3& direction) const
         {
@@ -138,7 +149,7 @@ namespace Probulator {
         inline vec3 evaluateBezier(const vec3& direction) const
         {
             u32 i0, i1, i2;
-            AmbientDice::VertexWeights weights[3];
+            AmbientDice::VertexWeights<float> weights[3];
             this->hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
             vec3 result =
@@ -166,7 +177,6 @@ namespace Probulator {
     {
         public:
         
-        static AmbientDice solveAmbientDiceRunningAverage(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceRunningAverageSRBF(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceLeastSquares(ImageBase<vec3>& directions, const Image& irradiance);

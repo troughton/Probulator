@@ -12,8 +12,8 @@
 
 namespace Probulator {
     
-    const float AmbientDice::kT = 0.618034f;
-    const float AmbientDice::kT2 = kT * kT;
+    const float80 AmbientDice::kT = 0.61803398874989484820458683436563811772030917980576286213;
+    const float80 AmbientDice::kT2 = kT * kT;
     
     const vec3 AmbientDice::vertexPositions[12] = {
         vec3(1.0, kT, 0.0),
@@ -247,21 +247,22 @@ namespace Probulator {
         *b2 = vec3(b, sign + n.y * n.y * a, -n.y);
     }
     
-    void AmbientDice::hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) {
-        const float alpha = 0.5f * sqrt(0.5f * (5.0f + sqrt(5.0f))); // 0.9510565163
-        const float beta = -0.5f * sqrt(0.1f * (5.0f + sqrt(5.0f))); // -0.4253254042
+    template <typename T>
+    void AmbientDice::hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights<T> *w0Out, VertexWeights<T> *w1Out, VertexWeights<T> *w2Out) {
+        const T alpha = 0.5f * sqrt(0.5 * (5.0f + sqrt(5.0f))); // 0.9510565163
+        const T beta = -0.5f * sqrt(0.1 * (5.0f + sqrt(5.0f))); // -0.4253254042
         
-        const float a0 = (sqrt(5.0f) - 5.0f) / 40.0f; // -0.06909830056
-        const float a1 = (11.0f * sqrt(5.0f) - 15.0f) / 40.0f; // 0.2399186938
-        const float a2 = sqrt(5.0f) / 10.0f; // 0.2236067977
+        const T a0 = (sqrt(5.0) - 5.0) / 40.0; // -0.06909830056
+        const T a1 = (11.0f * sqrt(5.0) - 15.0) / 40.0; // 0.2399186938
+        const T a2 = sqrt(5.0) / 10.0; // 0.2236067977
         
-        const float fValueFactor = -beta / alpha; // 0.4472135955
+        const T fValueFactor = -beta / alpha; // 0.4472135955
         
-        const float weightDenom = b1 * b2 + b0 * b2 + b0 * b1;
+        const T weightDenom = b1 * b2 + b0 * b2 + b0 * b1;
         
-        float w0 = (b1 * b2) / weightDenom;
-        float w1 = (b0 * b2) / weightDenom;
-        float w2 = (b0 * b1) / weightDenom;
+        T w0 = (b1 * b2) / weightDenom;
+        T w1 = (b0 * b2) / weightDenom;
+        T w2 = (b0 * b1) / weightDenom;
         
         if (b0 == 1.0) {
             w0 = 1.0;
@@ -280,38 +281,38 @@ namespace Probulator {
         // https://en.wikipedia.org/wiki/Bézier_triangle
         // Notation: cxyz means alpha^x, beta^y, gamma^z.
         
-        float v0ValueWeight = 0.0;
-        float v1ValueWeight = 0.0;
-        float v2ValueWeight = 0.0;
+        T v0ValueWeight = 0.0;
+        T v1ValueWeight = 0.0;
+        T v2ValueWeight = 0.0;
         
-        float v0DUWeight = 0.0;
-        float v1DUWeight = 0.0;
-        float v2DUWeight = 0.0;
+        T v0DUWeight = 0.0;
+        T v1DUWeight = 0.0;
+        T v2DUWeight = 0.0;
         
-        float v0DVWeight = 0.0;
-        float v1DVWeight = 0.0;
-        float v2DVWeight = 0.0;
+        T v0DVWeight = 0.0;
+        T v1DVWeight = 0.0;
+        T v2DVWeight = 0.0;
         
-        const float b0_2 = b0 * b0;
-        const float b1_2 = b1 * b1;
-        const float b2_2 = b2 * b2;
+        const T b0_2 = b0 * b0;
+        const T b1_2 = b1 * b1;
+        const T b2_2 = b2 * b2;
         
         // Add c300, c030, and c003
-        float c300Weight = b0_2 * b0;
-        float c030Weight = b1_2 * b1;
-        float c003Weight = b2_2 * b2;
+        T c300Weight = b0_2 * b0;
+        T c030Weight = b1_2 * b1;
+        T c003Weight = b2_2 * b2;
         
-        float c120Weight = 3 * b0 * b1_2;
-        float c021Weight = 3 * b1_2 * b2;
-        float c210Weight = 3 * b0_2 * b1;
-        float c012Weight = 3 * b1 * b2_2;
-        float c201Weight = 3 * b0_2 * b2;
-        float c102Weight = 3 * b0 * b2_2;
+        T c120Weight = 3 * b0 * b1_2;
+        T c021Weight = 3 * b1_2 * b2;
+        T c210Weight = 3 * b0_2 * b1;
+        T c012Weight = 3 * b1 * b2_2;
+        T c201Weight = 3 * b0_2 * b2;
+        T c102Weight = 3 * b0 * b2_2;
         
-        const float c111Weight = 6 * b0 * b1 * b2;
-        const float c0_111Weight = w0 * c111Weight;
-        const float c1_111Weight = w1 * c111Weight;
-        const float c2_111Weight = w2 * c111Weight;
+        const T c111Weight = 6 * b0 * b1 * b2;
+        const T c0_111Weight = w0 * c111Weight;
+        const T c1_111Weight = w1 * c111Weight;
+        const T c2_111Weight = w2 * c111Weight;
         
         v1ValueWeight += a0 * c0_111Weight;
         v2ValueWeight += a0 * c1_111Weight;
@@ -521,7 +522,8 @@ namespace Probulator {
     //        *w2Out = { v2ValueWeight, v2DUWeight, v2DVWeight };
     //    }
     
-    void AmbientDice::hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights *w0Out, VertexWeights *w1Out, VertexWeights *w2Out) {
+    template<typename T>
+    void AmbientDice::hybridCubicBezierWeights(vec3 direction, u32 *i0Out, u32 *i1Out, u32 *i2Out, VertexWeights<T> *w0Out, VertexWeights<T> *w1Out, VertexWeights<T> *w2Out) {
         
         u32 triIndex, i0, i1, i2;
         float b0, b1, b2;
@@ -534,13 +536,14 @@ namespace Probulator {
         *i2Out = i2;
     }
     
-    void AmbientDice::srbfWeights(vec3 direction, float *weightsOut) {
+    template<typename T>
+    void AmbientDice::srbfWeights(vec3 direction, T *weightsOut) {
         for (u64 i = 0; i < 6; i += 1) {
             float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
             u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
             
-            float cos2 = dotProduct * dotProduct;
-            float cos4 = cos2 * cos2;
+            T cos2 = dotProduct * dotProduct;
+            T cos4 = cos2 * cos2;
             
             weightsOut[index] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
         }
@@ -568,7 +571,7 @@ namespace Probulator {
     AmbientDice ExperimentAmbientDice::solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance)
     {
         AmbientDice ambientDice;
-        AmbientDice::VertexWeights vertexWeights[12] = { { 0.f, 0.f, 0.f } };
+        AmbientDice::VertexWeights<float> vertexWeights[12] = { { 0.f, 0.f, 0.f } };
         
         const u64 sampleCount = directions.getPixelCount();
         
@@ -586,7 +589,7 @@ namespace Probulator {
             const vec3& direction = directions.at(sampleIt);
             
             u32 i0, i1, i2;
-            AmbientDice::VertexWeights weights[3];
+            AmbientDice::VertexWeights<float> weights[3];
             AmbientDice::hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
             const u32 indices[3] = { i0, i1, i2 };
@@ -613,7 +616,7 @@ namespace Probulator {
             
             for (u64 i = 0; i < 3; i += 1) {
                 u32 index = indices[i];
-                const AmbientDice::VertexWeights &weight = weights[i];
+                const AmbientDice::VertexWeights<float> &weight = weights[i];
                 
                 vertexWeights[index].value += (weight.value * weight.value - vertexWeights[index].value) * sampleWeightScale;
                 vertexWeights[index].directionalDerivativeU += (weight.directionalDerivativeU * weight.directionalDerivativeU - vertexWeights[index].directionalDerivativeU) * sampleWeightScale;
@@ -671,7 +674,7 @@ namespace Probulator {
     AmbientDice ExperimentAmbientDice::solveAmbientDiceRunningAverageSRBF(const ImageBase<vec3>& directions, const Image& irradiance)
     {
         AmbientDice ambientDice;
-        AmbientDice::VertexWeights vertexWeights[12] = { { 0.f, 0.f, 0.f } };
+        AmbientDice::VertexWeights<float> vertexWeights[12] = { { 0.f, 0.f, 0.f } };
         
         const u64 sampleCount = directions.getPixelCount();
         
@@ -724,9 +727,10 @@ namespace Probulator {
     template<typename _Matrix_Type_>
     _Matrix_Type_ pseudoInverse( const _Matrix_Type_ &a, double epsilon = std::numeric_limits<double>::epsilon() )
     {
-        Eigen::JacobiSVD< _Matrix_Type_ > svd( a, Eigen::ComputeThinU | Eigen::ComputeThinV );
-        double tolerance = epsilon * std::max( a.cols(), a.rows() ) *svd.singularValues().array().abs()( 0 );
-        return svd.matrixV() *  ( svd.singularValues().array().abs() > tolerance ).select( svd.singularValues().array().inverse(), 0 ).matrix().asDiagonal() * svd.matrixU().adjoint();
+        return a.inverse();
+//        Eigen::JacobiSVD< _Matrix_Type_ > svd( a, Eigen::ComputeThinU | Eigen::ComputeThinV );
+//        double tolerance = epsilon * std::max( a.cols(), a.rows() ) *svd.singularValues().array().abs()( 0 );
+//        return svd.matrixV() *  ( svd.singularValues().array().abs() > tolerance ).select( svd.singularValues().array().inverse(), 0 ).matrix().asDiagonal() * svd.matrixU().adjoint();
     }
     
     Eigen::MatrixXd computeCosineGramMatrixBezier() {
@@ -747,7 +751,7 @@ namespace Probulator {
             double bWeights[36] = { 0.f };
             
             u32 i0, i1, i2;
-            AmbientDice::VertexWeights weights[3];
+            AmbientDice::VertexWeights<double> weights[3];
             AmbientDice::hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
             bWeights[3 * i0 + 0] = weights[0].value;
@@ -825,7 +829,6 @@ namespace Probulator {
                 vec3 brdfTangentDirection = sampleCosineHemisphere(sampleHammersley(brdfSampleIt, brdfSampleCount));
                 vec3 brdfWorldDirection = tangentToWorld * brdfTangentDirection;
                 
-                
                 float aWeightsLocal[12] = { 0.f };
                 
                 AmbientDice::srbfWeights(brdfWorldDirection, aWeightsLocal);
@@ -856,10 +859,10 @@ namespace Probulator {
     Eigen::MatrixXd computeGGXGramMatrixBezier(float alpha, bool fixedNormal) {
         using namespace Eigen;
         
-        const u64 sampleCount = 16384;
+        const u64 sampleCount = 8192;
         double sampleScale = fixedNormal ? 2 * M_PI / double(sampleCount) : 4 * M_PI / double(sampleCount);
         
-        const u64 brdfSampleCount = 16384;
+        const u64 brdfSampleCount = 8192;
         double brdfSampleScale = 1.f / double(brdfSampleCount);
         
         Microsurface *microsurface = new MicrosurfaceConductor(false, false, alpha, alpha);
@@ -870,17 +873,14 @@ namespace Probulator {
             vec2 sample = sampleHammersley(sampleIt, sampleCount);
             vec3 direction = fixedNormal ? sampleUniformHemisphere(sample.x, sample.y) : sampleUniformSphere(sample);
             
-            if (fixedNormal) {
-                direction = vec3(direction.x, direction.z, direction.y);
-            }
-            vec3 N = fixedNormal ? vec3(0, 1, 0) : direction;
+            vec3 N = fixedNormal ? vec3(0, 0, 1) : direction;
             mat3 tangentToWorld = makeOrthogonalBasis(N); // local to world
             mat3 worldToTangent = transpose(tangentToWorld);
             
             double bWeights[36] = { 0.f };
             
             u32 i0, i1, i2;
-            AmbientDice::VertexWeights weights[3];
+            AmbientDice::VertexWeights<double> weights[3];
             AmbientDice::hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
             bWeights[3 * i0 + 0] = weights[0].value;
@@ -946,10 +946,10 @@ namespace Probulator {
     Eigen::MatrixXd computeGGXGramMatrixSRBF(float alpha, bool fixedNormal) {
         using namespace Eigen;
         
-        const u64 sampleCount = 16384;
+        const u64 sampleCount = 4096;
         double sampleScale = fixedNormal ? 2 * M_PI / double(sampleCount) : 4 * M_PI / double(sampleCount);
         
-        const u64 brdfSampleCount = 16384;
+        const u64 brdfSampleCount = 4096;
         double brdfSampleScale = 1.f / double(brdfSampleCount);
         
         Microsurface *microsurface = new MicrosurfaceConductor(false, false, alpha, alpha);
@@ -960,10 +960,7 @@ namespace Probulator {
             vec2 sample = sampleHammersley(sampleIt, sampleCount);
             vec3 direction = fixedNormal ? sampleUniformHemisphere(sample.x, sample.y) : sampleUniformSphere(sample);
             
-            if (fixedNormal) {
-                direction = vec3(direction.x, direction.z, direction.y);
-            }
-            vec3 N = fixedNormal ? vec3(0, 1, 0) : direction;
+            vec3 N = fixedNormal ? vec3(0, 0, 1) : direction;
             mat3 tangentToWorld = makeOrthogonalBasis(N); // local to world
             mat3 worldToTangent = transpose(tangentToWorld);
             
@@ -1177,7 +1174,7 @@ namespace Probulator {
             float allWeights[36] = { 0.f };
             
             u32 i0, i1, i2;
-            AmbientDice::VertexWeights weights[3];
+            AmbientDice::VertexWeights<double> weights[3];
             AmbientDice::hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
             
             allWeights[3 * i0 + 0] = weights[0].value;
@@ -1195,6 +1192,40 @@ namespace Probulator {
             for (u64 lobeAIt = 0; lobeAIt < 36; ++lobeAIt)
             {
                 for (u64 lobeBIt = lobeAIt; lobeBIt < 36; ++lobeBIt)
+                {
+                    double delta = allWeights[lobeAIt] * allWeights[lobeBIt] * sampleScale;
+                    gram(lobeAIt, lobeBIt) += delta;
+                    
+                    if (lobeBIt != lobeAIt) {
+                        gram(lobeBIt, lobeAIt) += delta;
+                    }
+                }
+            }
+        }
+        
+        return gram;
+    }
+    
+    Eigen::MatrixXd computeGramMatrixSRBFHemisphere() {
+        using namespace Eigen;
+        
+        const u64 sampleCount = 32768;
+        double sampleScale = 2 * M_PI / double(sampleCount);
+        
+        AmbientDice ambientDice;
+        
+        MatrixXd gram = MatrixXd::Zero(12, 12);
+        
+        for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
+            dvec2 sample = sampleHammersleyDouble(sampleIt, sampleCount);
+            dvec3 direction = sampleUniformHemisphereDouble(sample.x, sample.y);
+            
+            float allWeights[12] = { 0.f };
+            AmbientDice::srbfWeights(direction, allWeights);
+            
+            for (u64 lobeAIt = 0; lobeAIt < 12; ++lobeAIt)
+            {
+                for (u64 lobeBIt = lobeAIt; lobeBIt < 12; ++lobeBIt)
                 {
                     double delta = allWeights[lobeAIt] * allWeights[lobeBIt] * sampleScale;
                     gram(lobeAIt, lobeBIt) += delta;
@@ -1248,7 +1279,7 @@ namespace Probulator {
         
         AmbientDice ambientDice;
         
-        MatrixXf moments = MatrixXf::Zero(36, 3);
+        MatrixXd moments = MatrixXd::Zero(36, 3);
         
         const ivec2 imageSize = directions.getSize();
         directions.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
@@ -1259,7 +1290,7 @@ namespace Probulator {
                                    const vec4& colour = irradiance.at(pixelPos);
                                    
                                    u32 i0, i1, i2;
-                                   AmbientDice::VertexWeights weights[3];
+                                   AmbientDice::VertexWeights<double> weights[3];
                                    AmbientDice::hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
                                    
                                    moments(3 * i0 + 0, 0) += weights[0].value * colour.r * texelArea;
@@ -1291,11 +1322,11 @@ namespace Probulator {
                                    moments(3 * i2 + 2, 2) += weights[2].directionalDerivativeV * colour.b * texelArea;
                                });
         
-        MatrixXf gram = AmbientDice::computeGramMatrixBezier().cast<float>();
+        MatrixXd gram = AmbientDice::computeGramMatrixBezier();
         
         auto solver = gram.jacobiSvd(ComputeThinU | ComputeThinV);
         
-        VectorXf b;
+        VectorXd b;
         b.resize(36);
         
         for (u32 channelIt = 0; channelIt < 3; ++channelIt)
@@ -1305,7 +1336,7 @@ namespace Probulator {
                 b[lobeIt] = moments(lobeIt, channelIt);
             }
             
-            VectorXf x = solver.solve(b);
+            VectorXd x = solver.solve(b);
             
             for (u64 basisIt = 0; basisIt < 12; ++basisIt)
             {
@@ -1395,24 +1426,35 @@ namespace Probulator {
 //        std::cout << "}\n";
 
         
-        MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixBezier());
-        for (u64 i = 1; i <= 20; i += 1) {
-            double sqrtAlpha = double(i) / 20.0;
-            double alpha = sqrtAlpha * sqrtAlpha;
-            
-            MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixBezier(alpha, true);
-            
-            std::cout << "let adBezierSpecularAlpha" << alpha << " : [[Double]] = [\n";
-            for (u64 i = 0; i < 36; i += 1) {
-                std::cout << "    [ ";
-    
-                for (u64 j = 0; j < 36; j += 1) {
-                    std::cout << resultMatrix(i, j) << ", ";
-                }
-                std::cout << "],\n";
-            }
-            std::cout << "]\n";
-        }
+//        std::cout << "alpha";
+//        for (u64 i = 0; i < 36; i += 1) {
+//            for (u64 j = i; j < 36; j += 1) {
+//                std::cout << ",coeff" << i << "-" << j;
+//            }
+//        }
+//        std::cout << std::endl;
+//
+//        MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixBezier());
+//        MatrixXd diffuseMatrix = inverseGram * computeCosineGramMatrixBezier();
+//
+//        for (u64 i = 1; i <= 20; i += 1) {
+//            double sqrtAlpha = double(i) / 20.0;
+//            double alpha = sqrtAlpha * sqrtAlpha;
+//
+//            std::cout << alpha;
+//
+//            MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixBezier(alpha, false);
+//
+//            for (u64 i = 0; i < 36; i += 1) {
+//                for (u64 j = i; j < 36; j += 1) {
+//                    double val = resultMatrix(i, j);
+//
+//                    std::cout << "," << val;
+//                }
+//            }
+//
+//            std::cout << std::endl;
+//        }
         
         
         m_radianceImage = Image(data.m_outputSize);
@@ -1429,6 +1471,52 @@ namespace Probulator {
             
             //            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
             AmbientDice ambientDiceIrradiance = ambientDiceConvertRadianceToIrradianceBezier(ambientDiceRadiance);
+            
+//            std::cout << "alpha";
+//            for (u64 i = 0; i < 12; i += 1) {
+//                for (u64 j = 0; j < 3; j += 1) {
+//                    std::cout << ",vert" << i << "-" << j;
+//                }
+//            }
+//            std::cout << std::endl;
+//    
+//            MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixBezier());
+//    
+//            for (u64 i = 1; i <= 20; i += 1) {
+//                double sqrtAlpha = double(i) / 20.0;
+//                double alpha = sqrtAlpha * sqrtAlpha;
+//    
+//                std::cout << alpha;
+//    
+//                MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixBezier(alpha, false);
+//                
+//                AmbientDice specular = { };
+//                
+//                for (u64 vert = 0; vert < 12; vert += 1) {
+//                    for (u64 otherVert = 0; otherVert < 12; otherVert += 1) {
+//                        specular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(3 * vert, 3 * otherVert);
+//                        specular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].directionalDerivativeU * (float)resultMatrix(3 * vert, 3 * otherVert + 1);
+//                        specular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].directionalDerivativeV * (float)resultMatrix(3 * vert, 3 * otherVert + 2);
+//                        
+//                        specular.vertices[vert].directionalDerivativeU += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(3 * vert + 1, 3 * otherVert);
+//                        specular.vertices[vert].directionalDerivativeU += ambientDiceRadiance.vertices[otherVert].directionalDerivativeU * (float)resultMatrix(3 * vert + 1, 3 * otherVert + 1);
+//                        specular.vertices[vert].directionalDerivativeU += ambientDiceRadiance.vertices[otherVert].directionalDerivativeV * (float)resultMatrix(3 * vert + 1, 3 * otherVert + 2);
+//                        
+//                        specular.vertices[vert].directionalDerivativeV += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(3 * vert + 2, 3 * otherVert);
+//                        specular.vertices[vert].directionalDerivativeV += ambientDiceRadiance.vertices[otherVert].directionalDerivativeU * (float)resultMatrix(3 * vert + 2, 3 * otherVert + 1);
+//                        specular.vertices[vert].directionalDerivativeV += ambientDiceRadiance.vertices[otherVert].directionalDerivativeV * (float)resultMatrix(3 * vert + 2, 3 * otherVert + 2);
+//                    }
+//                }
+//    
+//                for (u64 i = 0; i < 12; i += 1) {
+//                    std::cout << "," << (specular.vertices[i].value.g - ambientDiceRadiance.vertices[i].value.g) / (ambientDiceIrradiance.vertices[i].value.g - ambientDiceRadiance.vertices[i].value.g);
+//                    std::cout << "," << (specular.vertices[i].directionalDerivativeU.g - ambientDiceRadiance.vertices[i].directionalDerivativeU.g) / (ambientDiceIrradiance.vertices[i].directionalDerivativeU.g - ambientDiceRadiance.vertices[i].directionalDerivativeU.g);
+//                    std::cout << "," << (specular.vertices[i].directionalDerivativeV.g - ambientDiceRadiance.vertices[i].directionalDerivativeV.g) / (ambientDiceIrradiance.vertices[i].directionalDerivativeV.g - ambientDiceRadiance.vertices[i].directionalDerivativeV.g);
+//                }
+//    
+//                std::cout << std::endl;
+//            }
+
             
             //        float radianceFactor = 1.f - sqrt(ggxAlpha);
             //        float irradianceFactor = 1.f - radianceFactor;
