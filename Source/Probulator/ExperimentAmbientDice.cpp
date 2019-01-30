@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 
 #include "ExperimentAmbientDice.h"
 
@@ -9,6 +10,9 @@
 #include "MicrosurfaceScattering.h"
 
 #include <chrono>
+
+static const bool useHemisphereVertexPositions = false;
+static const size_t vertexCount = 12;
 
 namespace Probulator {
     
@@ -38,6 +42,31 @@ namespace Probulator {
         normalize(vec3(kT, 0.0, 1.0)),
         normalize(vec3(kT, -0.0, -1.0))
     };
+    
+    const vec3 AmbientDice::srbfHemisphereVertexPositions[9] = {
+        vec3(0.5257311121191337, -0.30353099910334314, 0.7946544722917661),
+        vec3(0.0, 0.6070619982066864, 0.7946544722917661),
+        vec3(-0.5257311121191337, -0.30353099910334314, 0.7946544722917661),
+        vec3(0.8506508083520399, 0.49112347318842303, 0.18759247408507987),
+        vec3(-0.8506508083520399, 0.49112347318842303, 0.18759247408507987),
+        vec3(0.0, -0.982246946376846, 0.1875924740850799),
+        vec3(-0.8506508083520399, -0.49112347318842303, -0.18759247408507987),
+        vec3(0.8506508083520399, -0.49112347318842303, -0.18759247408507987),
+        vec3(0.0, 0.982246946376846, -0.1875924740850799)
+    };
+    
+    //    const vec3 AmbientDice::srbfHemisphereVertexPositions[9] = {
+    //        sampleVogelsSphere(0, 18), // vec3(-0.8506508083520399, -0.49112347318842303, -0.18759247408507987),
+    //        sampleVogelsSphere(1, 18), // vec3(0.0, -0.982246946376846, 0.1875924740850799),
+    //        sampleVogelsSphere(2, 18), // vec3(0.0, 0.982246946376846, -0.1875924740850799),
+    //        sampleVogelsSphere(3, 18), // vec3(0.5257311121191337, -0.30353099910334314, 0.7946544722917661),
+    //        sampleVogelsSphere(4, 18), // vec3(0.0, 0.6070619982066864, 0.7946544722917661),
+    //        sampleVogelsSphere(5, 18), // vec3(-0.5257311121191337, -0.30353099910334314, 0.7946544722917661),
+    //        sampleVogelsSphere(6, 18), // vec3(0.8506508083520399, -0.49112347318842303, -0.18759247408507987),
+    //        sampleVogelsSphere(7, 18), // vec3(0.8506508083520399, 0.49112347318842303, 0.18759247408507987),
+    //        sampleVogelsSphere(8, 18), // vec3(-0.8506508083520399, 0.49112347318842303, 0.18759247408507987)
+    //    };
+    
     
     const vec3 AmbientDice::tangents[12] = {
         vec3(0.27639312, -0.44721365, -0.85065085),
@@ -538,31 +567,59 @@ namespace Probulator {
     
     template<typename T>
     void AmbientDice::srbfWeights(vec3 direction, T *weightsOut) {
-        for (u64 i = 0; i < 6; i += 1) {
-            float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
-            u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
-            
-            T cos2 = dotProduct * dotProduct;
-            T cos4 = cos2 * cos2;
-            
-            weightsOut[index] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+        if (useHemisphereVertexPositions) {
+            for (u64 i = 0; i < 9; i += 1) {
+                float dotProduct = max(dot(direction, AmbientDice::srbfHemisphereVertexPositions[i]), 0.f);
+                
+                T cos2 = dotProduct * dotProduct;
+                T cos4 = cos2 * cos2;
+                
+                weightsOut[i] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+            }
+            for (u64 i = 9; i < 12; i += 1) {
+                weightsOut[i] = 0.f;
+            }
+        } else {
+            for (u64 i = 0; i < 6; i += 1) {
+                float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
+                u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
+                
+                T cos2 = dotProduct * dotProduct;
+                T cos4 = cos2 * cos2;
+                
+                weightsOut[index] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+            }
         }
     }
     
     vec3 AmbientDice::evaluateSRBF(const vec3& direction) const
     {
         vec3 result = vec3(0.f);
-        for (u64 i = 0; i < 6; i += 1) {
-            float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
-            u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
-            
-            float cos2 = dotProduct * dotProduct;
-            float cos4 = cos2 * cos2;
-            
-            float weight = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
-            
-            //            float weight = 0.6f * exp(3.1f * (dotProduct - 1.f));
-            result += weight * this->vertices[index].value;
+        if (useHemisphereVertexPositions) {
+            for (u64 i = 0; i < 9; i += 1) {
+                float dotProduct = max(dot(direction, AmbientDice::srbfHemisphereVertexPositions[i]), 0.f);
+                
+                float cos2 = dotProduct * dotProduct;
+                float cos4 = cos2 * cos2;
+                
+                float weight = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+                
+                //            float weight = 0.6f * exp(3.1f * (dotProduct - 1.f));
+                result += weight * this->vertices[i].value;
+            }
+        } else {
+            for (u64 i = 0; i < 6; i += 1) {
+                float dotProduct = dot(direction, AmbientDice::srbfNormalisedVertexPositions[i]);
+                u32 index = dotProduct > 0 ? (2 * i) : (2 * i + 1);
+                
+                float cos2 = dotProduct * dotProduct;
+                float cos4 = cos2 * cos2;
+                
+                float weight = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+                
+                //            float weight = 0.6f * exp(3.1f * (dotProduct - 1.f));
+                result += weight * this->vertices[index].value;
+            }
         }
         
         return result;
@@ -728,16 +785,16 @@ namespace Probulator {
     _Matrix_Type_ pseudoInverse( const _Matrix_Type_ &a, double epsilon = std::numeric_limits<double>::epsilon() )
     {
         return a.inverse();
-//        Eigen::JacobiSVD< _Matrix_Type_ > svd( a, Eigen::ComputeThinU | Eigen::ComputeThinV );
-//        double tolerance = epsilon * std::max( a.cols(), a.rows() ) *svd.singularValues().array().abs()( 0 );
-//        return svd.matrixV() *  ( svd.singularValues().array().abs() > tolerance ).select( svd.singularValues().array().inverse(), 0 ).matrix().asDiagonal() * svd.matrixU().adjoint();
+        //        Eigen::JacobiSVD< _Matrix_Type_ > svd( a, Eigen::ComputeThinU | Eigen::ComputeThinV );
+        //        double tolerance = epsilon * std::max( a.cols(), a.rows() ) *svd.singularValues().array().abs()( 0 );
+        //        return svd.matrixV() *  ( svd.singularValues().array().abs() > tolerance ).select( svd.singularValues().array().inverse(), 0 ).matrix().asDiagonal() * svd.matrixU().adjoint();
     }
     
-    Eigen::MatrixXd computeCosineGramMatrixBezier() {
+    Eigen::MatrixXd computeCosineGramMatrixBezier(bool hemispherical) {
         using namespace Eigen;
         
         const u64 sampleCount = 16384;
-        double sampleScale = 4 * M_PI / double(sampleCount);
+        double sampleScale = (hemispherical ? 2 * M_PI : 4 * M_PI) / double(sampleCount);
         
         const u64 brdfSampleCount = 16384;
         double brdfSampleScale = 1.f / double(brdfSampleCount);
@@ -745,7 +802,8 @@ namespace Probulator {
         MatrixXd gram = MatrixXd::Zero(36, 36);
         
         for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
-            vec3 direction = sampleUniformSphere(sampleHammersley(sampleIt, sampleCount));
+            vec2 sample = sampleHammersley(sampleIt, sampleCount);
+            vec3 direction = hemispherical ? sampleUniformHemisphere(sample.x, sample.y) : sampleUniformSphere(sample);
             mat3 tangentToWorld = makeOrthogonalBasis(direction);
             
             double bWeights[36] = { 0.f };
@@ -771,17 +829,17 @@ namespace Probulator {
             for (u64 brdfSampleIt = 0; brdfSampleIt < brdfSampleCount; brdfSampleIt += 1) {
                 vec3 brdfTangentDirection = sampleCosineHemisphere(sampleHammersley(brdfSampleIt, brdfSampleCount));
                 vec3 brdfWorldDirection = tangentToWorld * brdfTangentDirection;
-
+                
                 AmbientDice::hybridCubicBezierWeights(brdfWorldDirection, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
-
+                
                 aWeights[3 * i0 + 0] += brdfSampleScale * weights[0].value;
                 aWeights[3 * i0 + 1] += brdfSampleScale * weights[0].directionalDerivativeU;
                 aWeights[3 * i0 + 2] += brdfSampleScale * weights[0].directionalDerivativeV;
-
+                
                 aWeights[3 * i1 + 0] += brdfSampleScale * weights[1].value;
                 aWeights[3 * i1 + 1] += brdfSampleScale * weights[1].directionalDerivativeU;
                 aWeights[3 * i1 + 2] += brdfSampleScale * weights[1].directionalDerivativeV;
-
+                
                 aWeights[3 * i2 + 0] += brdfSampleScale * weights[2].value;
                 aWeights[3 * i2 + 1] += brdfSampleScale * weights[2].directionalDerivativeU;
                 aWeights[3 * i2 + 2] += brdfSampleScale * weights[2].directionalDerivativeV;
@@ -805,19 +863,20 @@ namespace Probulator {
         return gram;
     }
     
-    Eigen::MatrixXd computeCosineGramMatrixSRBF() {
+    Eigen::MatrixXd computeCosineGramMatrixSRBF(bool hemispherical) {
         using namespace Eigen;
         
         const u64 sampleCount = 16384;
-        double sampleScale = 4 * M_PI / double(sampleCount);
+        double sampleScale = (hemispherical ? (2 * M_PI) : (4 * M_PI)) / double(sampleCount);
         
         const u64 brdfSampleCount = 16384;
         double brdfSampleScale = 1.f / double(brdfSampleCount);
         
-        MatrixXd gram = MatrixXd::Zero(12, 12);
+        MatrixXd gram = MatrixXd::Zero(vertexCount, vertexCount);
         
         for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
-            vec3 direction = sampleUniformSphere(sampleHammersley(sampleIt, sampleCount));
+            vec2 sample = sampleHammersley(sampleIt, sampleCount);
+            vec3 direction = hemispherical ? sampleUniformHemisphere(sample.x, sample.y) : sampleUniformSphere(sample);
             mat3 tangentToWorld = makeOrthogonalBasis(direction);
             
             float bWeights[12] = { 0.f };
@@ -828,6 +887,9 @@ namespace Probulator {
             for (u64 brdfSampleIt = 0; brdfSampleIt < brdfSampleCount; brdfSampleIt += 1) {
                 vec3 brdfTangentDirection = sampleCosineHemisphere(sampleHammersley(brdfSampleIt, brdfSampleCount));
                 vec3 brdfWorldDirection = tangentToWorld * brdfTangentDirection;
+                if (hemispherical && brdfWorldDirection.z < 0.f) {
+                    continue;
+                }
                 
                 float aWeightsLocal[12] = { 0.f };
                 
@@ -838,9 +900,9 @@ namespace Probulator {
                 }
             }
             
-            for (u64 lobeAIt = 0; lobeAIt < 12; ++lobeAIt)
+            for (u64 lobeAIt = 0; lobeAIt < vertexCount; ++lobeAIt)
             {
-                for (u64 lobeBIt = lobeAIt; lobeBIt < 12; ++lobeBIt)
+                for (u64 lobeBIt = lobeAIt; lobeBIt < vertexCount; ++lobeBIt)
                 {
                     double delta = aWeights[lobeAIt] * bWeights[lobeBIt] * sampleScale;
                     gram(lobeAIt, lobeBIt) += delta;
@@ -851,6 +913,114 @@ namespace Probulator {
                 }
             }
             
+        }
+        
+        //        {
+        //            double vertexCoverageScales[9] = { 0.0 };
+        //            double vertexCoverageScalesSphere[9] = { 0.0 };
+        //
+        //            for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
+        //                vec2 sample = sampleHammersley(sampleIt, sampleCount);
+        //                vec3 direction = sampleUniformHemisphere(sample.x, sample.y);
+        //                vec3 sphereDirection = sampleUniformSphere(sample);
+        //
+        //                mat3 tangentToWorld = makeOrthogonalBasis(direction);
+        //                mat3 tangentToWorldSphere = makeOrthogonalBasis(sphereDirection);
+        //
+        //                double aWeights[12] = { 0.f };
+        //                double aWeightsSphere[12] = { 0.f };
+        //
+        //                for (u64 brdfSampleIt = 0; brdfSampleIt < brdfSampleCount; brdfSampleIt += 1) {
+        //                    vec3 brdfTangentDirection = sampleCosineHemisphere(sampleHammersley(brdfSampleIt, brdfSampleCount));
+        //                    vec3 brdfWorldDirection = tangentToWorld * brdfTangentDirection;
+        //                    vec3 brdfWorldDirectionSphere = tangentToWorldSphere * brdfTangentDirection;
+        //
+        //                    if (hemispherical && brdfWorldDirection.z >= 0.f) {
+        //                        float aWeightsLocal[12] = { 0.f };
+        //
+        //                        AmbientDice::srbfWeights(brdfWorldDirection, aWeightsLocal);
+        //
+        //                        for (u64 i = 0; i < 12; i += 1) {
+        //                            aWeights[i] += aWeightsLocal[i] * brdfSampleScale;
+        //                        }
+        //                    }
+        //
+        //
+        //                    float aWeightsLocal[12] = { 0.f };
+        //
+        //                    AmbientDice::srbfWeights(brdfWorldDirectionSphere, aWeightsLocal);
+        //                    for (u64 i = 0; i < 12; i += 1) {
+        //                        aWeightsSphere[i] += aWeightsLocal[i] * brdfSampleScale;
+        //                    }
+        //
+        //                }
+        //
+        //                for (u64 lobeAIt = 0; lobeAIt < vertexCount; ++lobeAIt)
+        //                {
+        //                    double delta = aWeights[lobeAIt] * sampleScale;
+        //                    vertexCoverageScales[lobeAIt] += delta;
+        //                    vertexCoverageScalesSphere[lobeAIt] += aWeightsSphere[lobeAIt] * sampleScale;
+        //                }
+        //
+        //            }
+        //
+        //            std::cout << "Vertex coverage scales: \n";
+        //            for (int i = 0; i < 9; i += 1) {
+        //                std::cout << vertexCoverageScales[i] / vertexCoverageScalesSphere[i] << ", ";
+        //            }
+        //            std::cout << "\n";
+        //        }
+        
+        if (false) {
+            double vertexCoverageScales[9] = { 0.0 };
+            
+            const u64 sampleCount = 1024;
+            double sampleScale = (hemispherical ? (2 * M_PI) : (4 * M_PI)) / double(sampleCount);
+            
+            for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
+                vec2 sample = sampleHammersley(sampleIt, sampleCount);
+                vec3 direction = sampleUniformHemisphere(sample.x, sample.y);
+                
+                mat3 tangentToWorld = makeOrthogonalBasis(direction);
+                
+                double aWeights[12] = { 0.f };
+                
+                for (u64 brdfSampleIt = 0; brdfSampleIt < brdfSampleCount; brdfSampleIt += 1) {
+                    vec3 brdfTangentDirection = sampleCosineHemisphere(sampleHammersley(brdfSampleIt, brdfSampleCount));
+                    vec3 brdfWorldDirection = tangentToWorld * brdfTangentDirection;
+                    
+                    if (brdfWorldDirection.z >= 0.f) {
+                        float aWeightsLocal[9] = { 0.f };
+                        for (u64 i = 0; i < 9; i += 1) {
+                            float dotProduct = max(dot(brdfWorldDirection, AmbientDice::srbfHemisphereVertexPositions[i]), 0.f);
+                            
+                            float cos2 = dotProduct * dotProduct;
+                            float cos4 = cos2 * cos2;
+                            
+                            aWeightsLocal[i] = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+                        }
+                        
+                        for (u64 i = 0; i < 9; i += 1) {
+                            aWeights[i] += aWeightsLocal[i] * brdfSampleScale;
+                        }
+                    }
+                }
+                
+                for (u64 i = 0; i < 9; i += 1) {
+                    if (AmbientDice::srbfHemisphereVertexPositions[i].z > 0.f) { continue; }
+                    double dotProduct = dot(AmbientDice::srbfHemisphereVertexPositions[i], direction);
+                    double fittedWeight = 0.06f + 0.129 * dotProduct + 0.0697 * dotProduct * dotProduct;
+                    vertexCoverageScales[i] += (aWeights[i] / fittedWeight) / double(sampleCount);
+                    std::cout << direction.z << "," << dotProduct << "," << aWeights[i] << std::endl;
+                }
+                
+            }
+            
+            std::cout << "Vertex coverage scales: \n";
+            for (int i = 0; i < 9; i += 1) {
+                std::cout << vertexCoverageScales[i] << ", ";
+            }
+            std::cout << "\n";
         }
         
         return gram;
@@ -954,7 +1124,7 @@ namespace Probulator {
         
         Microsurface *microsurface = new MicrosurfaceConductor(false, false, alpha, alpha);
         
-        MatrixXd gram = MatrixXd::Zero(36, 36);
+        MatrixXd gram = MatrixXd::Zero(vertexCount, vertexCount);
         
         for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
             vec2 sample = sampleHammersley(sampleIt, sampleCount);
@@ -964,7 +1134,7 @@ namespace Probulator {
             mat3 tangentToWorld = makeOrthogonalBasis(N); // local to world
             mat3 worldToTangent = transpose(tangentToWorld);
             
-            float bWeights[12] = { 0.f };
+            double bWeights[12] = { 0.f };
             AmbientDice::srbfWeights(direction, bWeights);
             
             double aWeights[12] = { 0.0 };
@@ -979,8 +1149,11 @@ namespace Probulator {
             for (u64 brdfSampleIt = 0; brdfSampleIt < brdfSampleCount; brdfSampleIt += 1) {
                 vec3 brdfTangentDirection = microsurface->sample(outputDirectionTangent);
                 vec3 brdfWorldDirection = tangentToWorld * brdfTangentDirection;
+                if (fixedNormal && brdfWorldDirection.z < 0.f) {
+                    continue;
+                }
                 
-                float aWeightsLocal[12] = { 0.f };
+                double aWeightsLocal[12] = { 0.f };
                 AmbientDice::srbfWeights(brdfWorldDirection, aWeightsLocal);
                 
                 for (u64 i = 0; i < 12; i += 1) {
@@ -988,9 +1161,9 @@ namespace Probulator {
                 }
             }
             
-            for (u64 lobeAIt = 0; lobeAIt < 12; ++lobeAIt)
+            for (u64 lobeAIt = 0; lobeAIt < vertexCount; ++lobeAIt)
             {
-                for (u64 lobeBIt = lobeAIt; lobeBIt < 12; ++lobeBIt)
+                for (u64 lobeBIt = lobeAIt; lobeBIt < vertexCount; ++lobeBIt)
                 {
                     double delta = aWeights[lobeAIt] * bWeights[lobeBIt] * sampleScale;
                     gram(lobeAIt, lobeBIt) += delta;
@@ -1006,11 +1179,12 @@ namespace Probulator {
         
         return gram;
     }
-
+    
     AmbientDice ambientDiceConvertRadianceToSpecularBezier(const AmbientDice &ambientDiceRadiance) {
         using namespace Eigen;
         
-        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixBezier()) * computeGGXGramMatrixBezier(ggxAlpha, specularFixedNormal);
+        MatrixXd hemisphereGram = hemisphericalIntegral ? AmbientDice::computeGramMatrixBezier(/*hemispherical =*/ true) : AmbientDice::computeGramMatrixBezier();
+        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixBezier()) * computeGGXGramMatrixBezier(ggxAlpha, hemisphericalIntegral);
         
         AmbientDice specular = { };
         
@@ -1036,15 +1210,16 @@ namespace Probulator {
     AmbientDice ambientDiceConvertRadianceToSpecularSRBF(const AmbientDice &ambientDiceRadiance) {
         using namespace Eigen;
         
-        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixSRBF()) * computeGGXGramMatrixSRBF(ggxAlpha, specularFixedNormal);
+        MatrixXd hemisphereGram = hemisphericalIntegral ? AmbientDice::computeGramMatrixSRBF(/*hemispherical =*/ true) : AmbientDice::computeGramMatrixSRBF();
+        MatrixXd resultMatrix = pseudoInverse(hemisphereGram) * computeGGXGramMatrixSRBF(ggxAlpha, hemisphericalIntegral);
         
         std::cout << "Radiance to irradiance matrix: " << std::endl;
         std::cout << resultMatrix << std::endl;
         
         AmbientDice irradiance = { };
         
-        for (u64 vert = 0; vert < 12; vert += 1) {
-            for (u64 otherVert = 0; otherVert < 12; otherVert += 1) {
+        for (u64 vert = 0; vert < vertexCount; vert += 1) {
+            for (u64 otherVert = 0; otherVert < vertexCount; otherVert += 1) {
                 irradiance.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(vert, otherVert);
             }
         }
@@ -1055,7 +1230,7 @@ namespace Probulator {
     AmbientDice ambientDiceConvertRadianceToIrradianceBezier(const AmbientDice &ambientDiceRadiance) {
         using namespace Eigen;
         
-        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixBezier()) * computeCosineGramMatrixBezier();
+        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixBezier(hemisphericalIntegral)) * computeCosineGramMatrixBezier(hemisphericalIntegral);
         
         std::cout << "Radiance to irradiance matrix: " << std::endl;
         std::cout << resultMatrix << std::endl;
@@ -1084,15 +1259,15 @@ namespace Probulator {
     AmbientDice ambientDiceConvertRadianceToIrradianceSRBF(const AmbientDice &ambientDiceRadiance) {
         using namespace Eigen;
         
-        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixSRBF()) * computeCosineGramMatrixSRBF();
+        MatrixXd resultMatrix = pseudoInverse(AmbientDice::computeGramMatrixSRBF(hemisphericalIntegral)) * computeCosineGramMatrixSRBF(hemisphericalIntegral);
         
         std::cout << "Radiance to irradiance matrix: " << std::endl;
         std::cout << resultMatrix << std::endl;
         
         AmbientDice irradiance = { };
         
-        for (u64 vert = 0; vert < 12; vert += 1) {
-            for (u64 otherVert = 0; otherVert < 12; otherVert += 1) {
+        for (u64 vert = 0; vert < vertexCount; vert += 1) {
+            for (u64 otherVert = 0; otherVert < vertexCount; otherVert += 1) {
                 irradiance.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(vert, otherVert);
             }
         }
@@ -1158,20 +1333,21 @@ namespace Probulator {
     //        return ambientDice;
     //    }
     
-    Eigen::MatrixXd AmbientDice::computeGramMatrixBezier() {
+    Eigen::MatrixXd AmbientDice::computeGramMatrixBezier(bool hemispherical) {
         using namespace Eigen;
         
         const u64 sampleCount = 32768;
-        double sampleScale = 4 * M_PI / double(sampleCount);
+        double sampleScale = hemispherical ? 2 * M_PI / double(sampleCount) : 4 * M_PI / double(sampleCount);
         
         AmbientDice ambientDice;
         
         MatrixXd gram = MatrixXd::Zero(36, 36);
         
         for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
-            vec3 direction = sampleUniformSphere(sampleHammersley(sampleIt, sampleCount));
+            dvec2 sample = sampleHammersleyDouble(sampleIt, sampleCount);
+            dvec3 direction = hemispherical ? sampleUniformHemisphereDouble(sample.x, sample.y) : sampleUniformSphereDouble(sample.x, sample.y);
             
-            float allWeights[36] = { 0.f };
+            double allWeights[36] = { 0.f };
             
             u32 i0, i1, i2;
             AmbientDice::VertexWeights<double> weights[3];
@@ -1206,11 +1382,11 @@ namespace Probulator {
         return gram;
     }
     
-    Eigen::MatrixXd computeGramMatrixSRBFHemisphere() {
+    Eigen::MatrixXd AmbientDice::computeGramMatrixLinear(bool hemispherical) {
         using namespace Eigen;
         
         const u64 sampleCount = 32768;
-        double sampleScale = 2 * M_PI / double(sampleCount);
+        double sampleScale = hemispherical ? 2 * M_PI / double(sampleCount) : 4 * M_PI / double(sampleCount);
         
         AmbientDice ambientDice;
         
@@ -1218,47 +1394,53 @@ namespace Probulator {
         
         for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
             dvec2 sample = sampleHammersleyDouble(sampleIt, sampleCount);
-            dvec3 direction = sampleUniformHemisphereDouble(sample.x, sample.y);
+            dvec3 direction = hemispherical ? sampleUniformHemisphereDouble(sample.x, sample.y) : sampleUniformSphereDouble(sample.x, sample.y);
             
-            float allWeights[12] = { 0.f };
-            AmbientDice::srbfWeights(direction, allWeights);
+            u32 triIndex;
+            u32 i0, i1, i2;
+            float b0, b1, b2;
+            AmbientDice::computeBarycentrics(direction, &triIndex, &i0, &i1, &i2, &b0, &b1, &b2);
             
-            for (u64 lobeAIt = 0; lobeAIt < 12; ++lobeAIt)
+            
+            gram(i0, i0) += b0 * b0 * sampleScale;
+            gram(i0, i1) += b0 * b1 * sampleScale;
+            gram(i0, i1) += b0 * b2 * sampleScale;
+            gram(i1, i1) += b1 * b1 * sampleScale;
+            gram(i1, i2) += b1 * b2 * sampleScale;
+            gram(i2, i2) += b2 * b2 * sampleScale;
+        }
+        
+        for (u64 lobeAIt = 0; lobeAIt < 12; ++lobeAIt)
+        {
+            for (u64 lobeBIt = lobeAIt; lobeBIt < 12; ++lobeBIt)
             {
-                for (u64 lobeBIt = lobeAIt; lobeBIt < 12; ++lobeBIt)
-                {
-                    double delta = allWeights[lobeAIt] * allWeights[lobeBIt] * sampleScale;
-                    gram(lobeAIt, lobeBIt) += delta;
-                    
-                    if (lobeBIt != lobeAIt) {
-                        gram(lobeBIt, lobeAIt) += delta;
-                    }
-                }
+                gram(lobeBIt, lobeAIt) = gram(lobeAIt, lobeBIt);
             }
         }
         
         return gram;
     }
     
-    Eigen::MatrixXd AmbientDice::computeGramMatrixSRBF() {
+    Eigen::MatrixXd AmbientDice::computeGramMatrixSRBF(bool hemispherical) {
         using namespace Eigen;
         
         const u64 sampleCount = 32768;
-        double sampleScale = 4 * M_PI / double(sampleCount);
+        double sampleScale = hemispherical ? 2 * M_PI / double(sampleCount) : 4 * M_PI / double(sampleCount);
         
         AmbientDice ambientDice;
         
-        MatrixXd gram = MatrixXd::Zero(12, 12);
+        MatrixXd gram = MatrixXd::Zero(vertexCount, vertexCount);
         
         for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
-            vec3 direction = sampleUniformSphere(sampleHammersley(sampleIt, sampleCount));
+            dvec2 sample = sampleHammersleyDouble(sampleIt, sampleCount);
+            dvec3 direction = hemispherical ? sampleUniformHemisphereDouble(sample.x, sample.y) : sampleUniformSphereDouble(sample.x, sample.y);
             
-            float allWeights[12] = { 0.f };
+            double allWeights[12] = { 0.f };
             AmbientDice::srbfWeights(direction, allWeights);
             
-            for (u64 lobeAIt = 0; lobeAIt < 12; ++lobeAIt)
+            for (u64 lobeAIt = 0; lobeAIt < vertexCount; ++lobeAIt)
             {
-                for (u64 lobeBIt = lobeAIt; lobeBIt < 12; ++lobeBIt)
+                for (u64 lobeBIt = lobeAIt; lobeBIt < vertexCount; ++lobeBIt)
                 {
                     double delta = allWeights[lobeAIt] * allWeights[lobeBIt] * sampleScale;
                     gram(lobeAIt, lobeBIt) += delta;
@@ -1273,7 +1455,7 @@ namespace Probulator {
         return gram;
     }
     
-    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquares(ImageBase<vec3>& directions, const Image& irradiance)
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresBezier(ImageBase<vec3>& directions, const Image& irradiance)
     {
         using namespace Eigen;
         
@@ -1281,7 +1463,10 @@ namespace Probulator {
         
         MatrixXd moments = MatrixXd::Zero(36, 3);
         
-        const ivec2 imageSize = directions.getSize();
+        ivec2 imageSize = directions.getSize();
+        if (hemisphericalIntegral) {
+            imageSize.y /= 2;
+        }
         directions.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                {
                                    float texelArea = latLongTexelArea(pixelPos, imageSize);
@@ -1349,50 +1534,746 @@ namespace Probulator {
         return ambientDice;
     }
     
-    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresSRBF(ImageBase<vec3>& directions, const Image& irradiance)
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresBezierYCoCg(ImageBase<vec3>& directions, const Image& irradiance)
     {
         using namespace Eigen;
         
         AmbientDice ambientDice;
         
-        const u64 sampleCount = directions.getPixelCount();
+        VectorXd momentsY = VectorXd::Zero(36);
+        VectorXd momentsCo = VectorXd::Zero(12);
+        VectorXd momentsCg = VectorXd::Zero(12);
         
-        MatrixXf A = MatrixXf::Zero(sampleCount, 12);
-        
-        for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
-        {
-            const vec3& direction = directions.at(sampleIt);
-            
-            float weights[12] = { 0.f };
-            AmbientDice::srbfWeights(direction, weights);
-            
-            for (u64 i = 0; i < 12; i += 1) {
-                A(sampleIt, i) = weights[i];
-            }
-            
+        ivec2 imageSize = directions.getSize();
+        if (hemisphericalIntegral) {
+            imageSize.y /= 2;
         }
+        directions.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
+                               {
+                                   float texelArea = latLongTexelArea(pixelPos, imageSize);
+                                   //                                              float texelArea = 1.f / directions.getPixelCount();
+                                   
+                                   const vec4& colour = irradiance.at(pixelPos);
+                                   
+                                   vec3 colourYCoCg = RGBToYCoCg(vec3(colour.r, colour.g, colour.b));
+                                   
+                                   
+                                   u32 i0, i1, i2;
+                                   AmbientDice::VertexWeights<double> weights[3];
+                                   AmbientDice::hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
+                                   
+                                   u32 triIndex;
+                                   float b0, b1, b2;
+                                   AmbientDice::computeBarycentrics(direction, &triIndex, &i0, &i1, &i2, &b0, &b1, &b2);
+                                   
+                                   momentsY[3 * i0 + 0] += weights[0].value * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i0 + 1] += weights[0].directionalDerivativeU * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i0 + 2] += weights[0].directionalDerivativeV * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i1 + 0] += weights[1].value * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i1 + 1] += weights[1].directionalDerivativeU * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i1 + 2] += weights[1].directionalDerivativeV * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i2 + 0] += weights[2].value * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i2 + 1] += weights[2].directionalDerivativeU * colourYCoCg.r * texelArea;
+                                   momentsY[3 * i2 + 2] += weights[2].directionalDerivativeV * colourYCoCg.r * texelArea;
+                                   
+                                   momentsCo[i0] += b0 * colourYCoCg.g * texelArea;
+                                   momentsCo[i1] += b1 * colourYCoCg.g * texelArea;
+                                   momentsCo[i2] += b2 * colourYCoCg.g * texelArea;
+                                   
+                                   momentsCg[i0] += b0 * colourYCoCg.b * texelArea;
+                                   momentsCg[i1] += b1 * colourYCoCg.b * texelArea;
+                                   momentsCg[i2] += b2 * colourYCoCg.b * texelArea;
+                               });
         
-        auto solver = A.jacobiSvd(ComputeThinU | ComputeThinV);
+        MatrixXd gramBezier = AmbientDice::computeGramMatrixBezier();
+        MatrixXd gramLinear = AmbientDice::computeGramMatrixLinear();
         
-        VectorXf b;
-        b.resize(sampleCount);
+        VectorXd Y = gramBezier.jacobiSvd(ComputeThinU | ComputeThinV).solve(momentsY);
         
-        for (u32 channelIt = 0; channelIt < 3; ++channelIt)
+        const auto linearSolver = gramLinear.jacobiSvd(ComputeThinU | ComputeThinV);
+        VectorXd Co = linearSolver.solve(momentsCo);
+        VectorXd Cg = linearSolver.solve(momentsCg);
+        
+        for (u64 basisIt = 0; basisIt < 12; ++basisIt)
         {
-            for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
-            {
-                b[sampleIt] = irradiance.at(sampleIt)[channelIt];
-            }
+            ambientDice.vertices[basisIt].value[0] = Y[3 * basisIt];
+            ambientDice.vertices[basisIt].directionalDerivativeU[0] = Y[3 * basisIt + 1];
+            ambientDice.vertices[basisIt].directionalDerivativeV[0] = Y[3 * basisIt + 2];
             
-            VectorXf x = solver.solve(b);
-            
-            for (u64 basisIt = 0; basisIt < 12; ++basisIt)
-            {
-                ambientDice.vertices[basisIt].value[channelIt] = x[basisIt];
-            }
+            ambientDice.vertices[basisIt].value[1] = Co[basisIt];
+            ambientDice.vertices[basisIt].value[2] = Cg[basisIt];
         }
         
         return ambientDice;
+    }
+    
+    AmbientDice ExperimentAmbientDice::solveAmbientDiceLeastSquaresSRBF(ImageBase<vec3>& directions, const Image& irradiance)
+    {
+//        using namespace Eigen;
+//
+//        AmbientDice ambientDice;
+//
+//        const u64 sampleCount = hemisphericalIntegral ? directions.getPixelCount() / 2 : directions.getPixelCount();
+//
+//        MatrixXf A = MatrixXf::Zero(sampleCount, 12);
+//
+//        for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+//        {
+//            const vec3& direction = directions.at(sampleIt);
+//
+//            float weights[12] = { 0.f };
+//            AmbientDice::srbfWeights(direction, weights);
+//
+//            for (u64 i = 0; i < 12; i += 1) {
+//                A(sampleIt, i) = weights[i];
+//            }
+//
+//        }
+//
+//        auto solver = A.jacobiSvd(ComputeThinU | ComputeThinV);
+//
+//        VectorXf b;
+//        b.resize(sampleCount);
+//
+//        for (u32 channelIt = 0; channelIt < 3; ++channelIt)
+//        {
+//            for (u64 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
+//            {
+//                b[sampleIt] = irradiance.at(sampleIt)[channelIt];
+//            }
+//
+//            VectorXf x = solver.solve(b);
+//
+//            for (u64 basisIt = 0; basisIt < 12; ++basisIt)
+//            {
+//                ambientDice.vertices[basisIt].value[channelIt] = x[basisIt];
+//            }
+//        }
+//
+//        return ambientDice;
+
+        using namespace Eigen;
+        
+        AmbientDice ambientDice;
+        
+        VectorXd momentsR = VectorXd::Zero(vertexCount);
+        VectorXd momentsG = VectorXd::Zero(vertexCount);
+        VectorXd momentsB = VectorXd::Zero(vertexCount);
+        
+        ivec2 imageSize = directions.getSize();
+        if (hemisphericalIntegral) {
+            imageSize.y /= 2;
+        }
+        directions.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
+                               {
+                                   float texelArea = latLongTexelArea(pixelPos, imageSize);
+                                   //                                              float texelArea = 1.f / directions.getPixelCount();
+                                   
+                                   const vec4& colour = irradiance.at(pixelPos);
+                                   
+                                   double weights[12];
+                                   AmbientDice::srbfWeights(direction, weights);
+                                   
+                                   for (size_t i = 0; i < vertexCount; i += 1) {
+                                       momentsR[i] += weights[i] * colour.r * texelArea;
+                                       momentsG[i] += weights[i] * colour.g * texelArea;
+                                       momentsB[i] += weights[i] * colour.b * texelArea;
+                                   }
+                               });
+        
+        MatrixXd gram = AmbientDice::computeGramMatrixSRBF();
+        
+        const auto solver = gram.jacobiSvd(ComputeThinU | ComputeThinV);
+        VectorXd R = solver.solve(momentsR);
+        VectorXd G = solver.solve(momentsG);
+        VectorXd B = solver.solve(momentsB);
+        
+        for (u64 basisIt = 0; basisIt < vertexCount; ++basisIt)
+        {
+            ambientDice.vertices[basisIt].value[0] = R[basisIt];
+            ambientDice.vertices[basisIt].value[1] = G[basisIt];
+            ambientDice.vertices[basisIt].value[2] = B[basisIt];
+        }
+        
+        return ambientDice;
+    }
+    
+    // Normal is assumed to be at (0, 0, 1)
+    inline double evaluateSRBFBasisWeightGGX(float ggxAlpha, float vertexTheta, float vertexPhi, float viewDirTheta, float viewDirPhi) {
+        
+        vec3 V = vec3(cos(viewDirPhi) * sin(viewDirTheta), sin(viewDirPhi) * sin(viewDirTheta), cos(viewDirTheta));
+        if (V.z <= 0.f) {
+            return 0.0;
+        }
+        
+        vec3 vertexTangent = vec3(cos(vertexPhi) * sin(vertexTheta), sin(vertexPhi) * sin(vertexTheta), cos(vertexTheta));
+        
+        const u64 sampleCount = 1536;
+        const double sampleScale = 1.0 / double(sampleCount);
+        
+        double integral = 0.0;
+        for (u64 sampleIt = 1; sampleIt <= sampleCount; sampleIt += 1) {
+            vec2 sampleUV = vec2(sampleHalton(sampleIt, 2), sampleHalton(sampleIt, 3));
+            vec3 H = sampleGGXVNDF(V, ggxAlpha, ggxAlpha, sampleUV.x, sampleUV.y); // depends on viewDirTheta, viewDirPhi
+            vec3 lightDirectionTangent = reflect(-V, H); // depends on viewDirTheta, viewDirPhi
+            
+            float f0 = 1.0f; // 0.1f;
+            float f90 = 1.0f;
+            
+            //Specular
+            float Vis = SmithGGXMaskingShadowingG2OverG1Reflection(V, lightDirectionTangent, H, ggxAlpha); // depends on viewDirTheta, viewDirPhi
+            double F = F_Schlick(f0, f90, saturate(dot(V, H))); // depends on viewDirTheta, viewDirPhi
+            
+            double brdf = F * Vis;
+            
+            double basis = 0.0;
+            {
+                double dotProduct = max(dot(lightDirectionTangent, vertexTangent), 0.f); // depends on viewDirTheta, viewDirPhi, vertexTheta, vertexPhi (or, alternately, the angle between the view dir and the vertex tangent)
+                double cos2 = dotProduct * dotProduct;
+                double cos4 = cos2 * cos2;
+                basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+            }
+            
+            integral += brdf * basis * sampleScale;
+        }
+        
+        return integral;
+    }
+    
+    /// All inputs are in world space.
+    inline double evaluateSRBFBasisWeightMS(const Microsurface &microsurface, const vec3 vertex, const vec3 normal, const vec3 viewDirection) {
+        
+        mat3 worldToTangent = transpose(makeOrthogonalBasis(normal));
+        vec3 V = worldToTangent * viewDirection;
+        if (V.z <= 0.f) {
+            return 0.0;
+        }
+        
+        vec3 vertexTangent = worldToTangent * vertex;
+        
+        const u64 sampleCount = 4096;
+        const double sampleScale = 1.0 / double(sampleCount);
+        
+        double integral = 0.0;
+        for (u64 sampleIt = 1; sampleIt <= sampleCount; sampleIt += 1) {
+            vec3 H = microsurface.sample(V);
+            vec3 lightDirectionTangent = reflect(-V, H);
+            
+            // How much does the average reflected direction lie along the basis function?
+            double basis = 0.0;
+            {
+                double dotProduct = max(dot(lightDirectionTangent, vertexTangent), 0.f);
+                double cos2 = dotProduct * dotProduct;
+                double cos4 = cos2 * cos2;
+                basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+            }
+            
+            integral += basis * sampleScale;
+        }
+        
+        return integral;
+    }
+    
+    /// All inputs are in world space.
+    inline vec2 evaluateDFGWeightGGX(float ggxAlpha, const vec3 normal, const vec3 viewDirection) {
+        
+        mat3 worldToTangent = transpose(makeOrthogonalBasis(normal));
+        vec3 V = worldToTangent * viewDirection;
+        if (V.z <= 0.f) {
+            return vec2(0.0);
+        }
+        
+        const u64 sampleCount = 1024;
+        const double sampleScale = 1.0 / double(sampleCount);
+        
+        dvec2 integral = dvec2(0.0);
+        for (u64 sampleIt = 1; sampleIt <= sampleCount; sampleIt += 1) {
+            vec2 sampleUV = vec2(sampleHalton(sampleIt, 2), sampleHalton(sampleIt, 3));
+            vec3 H = sampleGGXVNDF(V, ggxAlpha, ggxAlpha, sampleUV.x, sampleUV.y);
+            vec3 lightDirectionTangent = reflect(-V, H);
+            
+            //Specular
+            float Vis = SmithGGXMaskingShadowingG2OverG1Reflection(V, lightDirectionTangent, H, ggxAlpha);
+            
+            if (lightDirectionTangent.z < 0.f) {
+                Vis = 0.0;
+            }
+            
+            float VdotH = dot(H, V);
+            float fresnel = pow( 1.f - VdotH, 5.0 );
+            
+            dvec2 brdf = dvec2((1 - fresnel) * Vis, fresnel * Vis);
+            integral += brdf * sampleScale;
+        }
+        
+        return vec2(integral.x, integral.y);
+    }
+    
+    /// All inputs are in world space.
+    inline vec2 evaluateSRBFBasisWeightGGX(float ggxAlpha, const vec3 vertex, const vec3 normal, const vec3 viewDirection) {
+        
+        mat3 worldToTangent = transpose(makeOrthogonalBasis(normal));
+        vec3 V = worldToTangent * viewDirection;
+        if (V.z <= 0.f) {
+            return dvec2(0.0);
+        }
+        
+        vec3 vertexTangent = worldToTangent * vertex;
+        
+        const u64 sampleCount = 4096;
+        const double sampleScale = 1.0 / double(sampleCount);
+        
+        dvec2 integral = dvec2(0.0);
+        for (u64 sampleIt = 1; sampleIt <= sampleCount; sampleIt += 1) {
+            vec2 sampleUV = vec2(sampleHalton(sampleIt, 2), sampleHalton(sampleIt, 3));
+            vec3 H = sampleGGXVNDF(V, ggxAlpha, ggxAlpha, sampleUV.x, sampleUV.y);
+            vec3 lightDirectionTangent = reflect(-V, H);
+            
+            //Specular
+            float Vis = SmithGGXMaskingShadowingG2OverG1Reflection(V, lightDirectionTangent, H, ggxAlpha);
+            float VdotH = dot(H, V);
+            float fresnel = pow( 1.f - VdotH, 5.0 );
+            
+            dvec2 brdf = dvec2((1 - fresnel) * Vis, fresnel * Vis);
+            
+            // How much does the average reflected direction lie along the basis function?
+            double basis = 0.0;
+            {
+                double dotProduct = max(dot(lightDirectionTangent, vertexTangent), 0.f);
+                double cos2 = dotProduct * dotProduct;
+                double cos4 = cos2 * cos2;
+                basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+            }
+            
+            integral += brdf * basis * sampleScale;
+        }
+        
+        return vec2(integral.x, integral.y);
+    }
+    
+    inline float square(float x) {
+        return x * x;
+    }
+    
+    inline float quart(float x) {
+        return (x * x) * (x * x);
+    }
+    
+    inline float basisFunction(float cosTheta) {
+        float dotProduct = max(cosTheta, 0.f);
+        float cos2 = dotProduct * dotProduct;
+        float cos4 = cos2 * cos2;
+        return 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+    }
+    
+    inline vec3 ggxDominantDirection(vec3 N, vec3 R, float roughness) {
+        float smoothness = saturate(1.f - roughness);
+        float lerpFactor = smoothness * (sqrt(smoothness) + roughness);
+        return normalize(mix(N, R, lerpFactor));
+    }
+    
+    const float parameters[10] = { -0.03480017115306019, 1.5767277269939315, 3.2915521747760006, -8.886052306193424, 5.289174934167271, 0.658318188157326, -0.9258960547724002, 2.9786527829025813, -2.0077225608393703, 0.2642150798240006 };
+    
+    inline vec2 lutValueApprox(float NdotV, float ggxAlpha) {
+        const uint sampleCount = 512u;
+        const float sampleScale = 1.f / float(sampleCount);
+        
+        NdotV = min(max(NdotV, 0.5f / 256.f), 0.999f);
+        ggxAlpha = min(max(ggxAlpha, 0.5f / 256.f), 0.999f);
+        
+        vec3 viewDirection = vec3(0, sqrt(1.f - NdotV * NdotV), NdotV);
+        vec3 R = vec3(-viewDirection.x, -viewDirection.y, viewDirection.z);
+        vec3 reflectionDir = ggxDominantDirection(vec3(0, 0, 1), R, ggxAlpha);
+        
+        vec3 basisDirection = reflectionDir; // vec3(0, 0, 1);
+        
+        float RdotVert = dot(R, basisDirection);
+        float basisInMirrorDir = basisFunction(RdotVert);
+        
+        float focusLerp = parameters[5] + parameters[6] * ggxAlpha + parameters[7] * ggxAlpha * ggxAlpha + parameters[8] * ggxAlpha * ggxAlpha * ggxAlpha + parameters[9] * ggxAlpha * ggxAlpha * ggxAlpha * ggxAlpha;
+        float diffuseParam = mix(RdotVert, basisDirection.z, saturate(focusLerp));
+        float diffuse = 0.06 + 0.129 * diffuseParam + 0.0697 * diffuseParam * diffuseParam;
+        
+        float alphaLerp = parameters[0] + parameters[1] * ggxAlpha + parameters[2] * ggxAlpha * ggxAlpha + parameters[3] * ggxAlpha * ggxAlpha * ggxAlpha + parameters[4] * ggxAlpha * ggxAlpha * ggxAlpha * ggxAlpha;
+        
+        float value = mix(basisInMirrorDir, diffuse, saturate(alphaLerp));
+        
+        vec2 groundTruth = vec2(0.0); // for f0 and f90MinusF0
+        for (uint sampleIt = 0u; sampleIt < sampleCount; sampleIt += 1u) {
+            vec2 sampleUV = sampleHammersley(sampleIt, sampleCount);
+            vec3 H = sampleGGXVNDF(viewDirection, ggxAlpha, ggxAlpha, sampleUV.y, sampleUV.x);
+            vec3 lightDirectionTangent = reflect(-viewDirection, H);
+            
+            //Specular
+            float Vis = SmithGGXMaskingShadowingG2OverG1Reflection(viewDirection, lightDirectionTangent, H, ggxAlpha);
+            
+            float f0Weight = 1.f;
+            float f90MinusF0Weight = pow(1.f - saturate(dot(viewDirection, H)), 5.f);  //native_powr(1.f - u, 5.f);
+            
+            float basis = basisFunction(dot(basisDirection, lightDirectionTangent));
+            
+            vec2 brdf = vec2(f0Weight - f90MinusF0Weight, f90MinusF0Weight) * Vis;
+            if (lightDirectionTangent.z > 0.f) {
+                groundTruth += basis * brdf * sampleScale;
+            }
+        }
+        
+        return groundTruth / vec2(value);
+    }
+    
+    inline vec2 estimateSRBFBasisWeightGGXCustomFit(float ggxAlpha, const vec3 lobeDirection, const vec3 normal, const vec3 viewDirection) {
+        float NdotV = dot(normal, viewDirection);
+        if (NdotV < 0.f) {
+            return vec2(0.f);
+        }
+        
+        vec3 R = reflect(-viewDirection, normal);
+        float RdotVert = dot(lobeDirection, R);
+        
+        float NdotLobe = dot(normal, lobeDirection);
+        
+        float basisInMirrorDir = basisFunction(RdotVert);
+        
+        float focusLerp = parameters[5] + parameters[6] * ggxAlpha + parameters[7] * ggxAlpha * ggxAlpha + parameters[8] * ggxAlpha * ggxAlpha * ggxAlpha + parameters[9] * ggxAlpha * ggxAlpha * ggxAlpha * ggxAlpha;
+        float diffuseParam = mix(RdotVert, NdotLobe, saturate(focusLerp));
+        float diffuse = 0.06 + 0.129 * diffuseParam + 0.0697 * diffuseParam * diffuseParam;
+        
+        float alphaLerp = parameters[0] + parameters[1] * ggxAlpha + parameters[2] * ggxAlpha * ggxAlpha + parameters[3] * ggxAlpha * ggxAlpha * ggxAlpha + parameters[4] * ggxAlpha * ggxAlpha * ggxAlpha * ggxAlpha;
+        
+        float value = mix(basisInMirrorDir, diffuse, saturate(alphaLerp));
+    
+        vec2 result = vec2(value);
+        return result * lutValueApprox(NdotV, ggxAlpha);
+    }
+    
+    inline float chebyshevPolynomial(float x, u32 order) {
+        if (order == 0) {
+            return 1.f;
+        }
+        if (order == 1) {
+            return x;
+        }
+        return 2.f * x * chebyshevPolynomial(x, order - 1) - chebyshevPolynomial(x, order - 2);
+    }
+    
+    inline float evaluateAmbientDiceCosineLobeDiffuseFromRadiance(float thetaLobe) {
+        
+        float cosThetaLobe = cos(thetaLobe);
+        float sinThetaLobe = sin(thetaLobe);
+        
+        float cosThetaLobeSq = cosThetaLobe * cosThetaLobe;
+        float cosThetaLobeP3 = cosThetaLobeSq * cosThetaLobe;
+        float cosThetaLobeP4 = cosThetaLobeSq * cosThetaLobeSq;
+        float cosThetaLobeP6 = cosThetaLobeP4 * cosThetaLobeSq;
+        float cosThetaLobeP8 = cosThetaLobeP4 * cosThetaLobeP4;
+        float cosThetaLobeP10 = cosThetaLobeP8 * cosThetaLobeSq;
+        
+        // If thetaLobe > pi/2 (so integration domain phi ∈ [0, pi], theta ∈ [thetaLobe - pi/2, pi/2]):
+        float rightQuarterSphereClipped = (1167.f*cos(6*thetaLobe))/163840.f - (313.f*cos(4.f*thetaLobe))/61440.f - (8959.f*cos(2.f*thetaLobe))/245760 + (5.f*cos(8.f*thetaLobe))/49152 - (35.f*cos(10.f*thetaLobe))/98304.f + (67.f*sin(2.f*thetaLobe))/960.f + sin(4.f*thetaLobe)/384.f + (113.f*cos(2.f*thetaLobe))/(5760.f*pi) - cos(4.f*thetaLobe)/(576.f*pi) - (53.f*cos(6.f*thetaLobe))/(2560.f*pi) - cos(8.f*thetaLobe)/(4608.f*pi) + (5.f*cos(10.f*thetaLobe))/(4608.f*pi) + 1/(512.f*pi) + (67.f*atan((sqrt(2.f)*(cos(thetaLobe/2.f) - sin(thetaLobe/2.f)))/(2.f*cos(thetaLobe/2.f - pi/4.f)))*sin(2.f*thetaLobe))/(240.f*pi) + (atan((sqrt(2.f)*(cos(thetaLobe/2.f) - sin(thetaLobe/2.f)))/(2.f*cos(thetaLobe/2.f - pi/4.f)))*sin(4.f*thetaLobe))/(96.f*pi) + 2841.f/81920.f;
+        
+        // Otherwise, the right quarter sphere fully intersects with the BRDF and the left is partially clipped.
+        float fullHemisphereClipped = (3.f*cosThetaLobeSq)/40.f + (41.f*cosThetaLobeP4)/192.f + (63.f*cosThetaLobeP6)/320.f - (15.f*cosThetaLobeP8)/32.f + (35.f*cosThetaLobeP10)/192.f + (31.f*cosThetaLobeSq)/(120.f*pi) - (23.f*cosThetaLobeP4)/(45.f*pi) - (73.f*cosThetaLobeP6)/(120.f*pi) + (17.f*cosThetaLobeP8)/(12.f*pi) - (5*cosThetaLobeP10)/(9.f*pi) + (31.f*thetaLobe*cosThetaLobe*sinThetaLobe)/(120.f*pi) + (thetaLobe*cosThetaLobeP3*sinThetaLobe)/(24.f*pi) + 19.f/320.f;
+        
+        if (thetaLobe > pi/2.f) {
+            return rightQuarterSphereClipped;
+        } else {
+            return fullHemisphereClipped;
+        }
+    }
+    
+    void specularLobeTests() {
+            std::ofstream specularLobeCoefficients;
+            //        specularLobeCoefficients.open ("ADSRBFSpecularLobeCoefficients.csv");
+            //        specularLobeCoefficients << "ggxAlpha,NdotV,vertDotV,vertDotN,vertDotR,integral" << std::endl;
+            //        specularLobeCoefficients.open ("ADSRBFSpecularLobeCoefficientsIsotropic.csv");
+            //        specularLobeCoefficients << "ggxAlpha,vertDotN,integral" << std::endl;
+    
+    
+    
+            // View direction, vertex direction, roughness. Normal is always at (0, 0, 1).
+            // View direction is 2D (phi, theta). Vertex direction is 2D but fixed (phi = 0). Roughness is 1D.
+            // For vertex direction we're interested in cos(theta). For view direction it's cos(theta) and cos(phi).
+    
+//            specularLobeCoefficients.open ("ADSRBFSpecularLobeCoefficientsMS.csv");
+//            specularLobeCoefficients << "ggxAlpha,NdotV,vertexDotN,vertexDotR,basisInMirrorDir,integral" << std::endl;
+//
+//    //
+//    //        {
+//    //            for (u64 alphaIt = 1; alphaIt <= 20; alphaIt += 1) {
+//    //                float sqrtAlpha = alphaIt / 20.0; // The GGX roughness parameter.
+//    //                float alpha = sqrtAlpha * sqrtAlpha;
+//    //
+//    //                for (u64 thetaVert = 0; thetaVert <= 31; thetaVert += 1) {
+//    //                    const float sinThetaVert = sin(float(thetaVert) * M_PI / 31.f);
+//    //                    const float cosThetaVert = cos(float(thetaVert) * M_PI / 31.f);
+//    //
+//    //                    const vec3 vertex = vec3(0, sinThetaVert, cosThetaVert);
+//    //
+//    //                    for (u64 phiV = 0; phiV <= 31; phiV += 1) {
+//    //                        const float sinPhiV = sin(float(phiV) * M_PI / 31.f);
+//    //                        const float cosPhiV = cos(float(phiV) * M_PI / 31.f);
+//    //
+//    //                        for (u64 thetaV = 0; thetaV <= 31; thetaV += 1) {
+//    //                            const float sinThetaV = sin(float(thetaV) * M_PI_2 / 31.f);
+//    //                            const float cosThetaV = cos(float(thetaV) * M_PI_2 / 31.f);
+//    //
+//    //                            const vec3 V = vec3(sinThetaV * sinPhiV, sinThetaV * cosPhiV, cosThetaV);
+//    //
+//    //                            vec2 integral = vec2(0.0); // for f0 and f90MinusF0
+//    //                            const u64 sampleCount = 2048;
+//    //                            const float sampleScale = 1.f / float(sampleCount);
+//    //                            for (uint sampleIt = 0u; sampleIt < sampleCount; sampleIt += 1u) {
+//    //                                vec2 sampleUV = vec2(sampleHalton(sampleIt, 2), sampleHalton(sampleIt, 3));
+//    //                                vec3 H = sampleGGXVNDF(V, alpha, alpha, sampleUV.x, sampleUV.y); // depends on viewDirTheta, viewDirPhi
+//    //                                vec3 lightDirectionTangent = reflect(-V, H); // depends on viewDirTheta, viewDirPhi
+//    //                                if (lightDirectionTangent.z < 0) { continue; }
+//    //
+//    //                                //Specular
+//    //                                float Vis = SmithGGXMaskingShadowingG2OverG1Reflection(V, lightDirectionTangent, H, alpha); // depends on viewDirTheta, viewDirPhi
+//    //                                float f0Weight = 1.f;
+//    //                                float f90MinusF0Weight = pow(1.f - saturate(dot(V, H)), 5.f);  //native_powr(1.f - u, 5.f);
+//    //
+//    //                                vec2 brdf = vec2(f0Weight, f90MinusF0Weight) * Vis;
+//    //
+//    //                                // How much does the average reflected direction lie along the basis function?
+//    //                                float basis = 0.0;
+//    //                                {
+//    //                                    float dotProduct = max(dot(lightDirectionTangent, vertex), 0.f);
+//    //                                    float cos2 = dotProduct * dotProduct;
+//    //                                    float cos4 = cos2 * cos2;
+//    //                                    basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+//    //                                }
+//    //
+//    //                                integral+= brdf * basis * sampleScale;
+//    //                            }
+//    //
+//    //                            specularLobeCoefficients << alpha << "," << cosThetaVert << "," << sinPhiV << "," << cosPhiV << "," << integral.x << "," << integral.y << std::endl;
+//    //                        }
+//    //                    }
+//    //                }
+//    //            }
+//    //
+//    //            specularLobeCoefficients.close();
+//    //            exit(0);
+//    //        }
+//
+//            const size_t lobeDirCount = 32;
+//
+//            vec3 lobeDirs[lobeDirCount] = {};
+//            for (u64 lobeDirIt = 0; lobeDirIt < lobeDirCount; lobeDirIt += 1) {
+//                const vec2 sample = vec2(sampleHalton(lobeDirIt + 1, 3), sampleHalton(lobeDirIt + 1, 2));
+//                const vec3 vertex = sampleUniformSphere(sample.x, sample.y);
+//                lobeDirs[lobeDirIt] = vertex;
+//            }
+//
+//            for (u64 alphaIt = 1; alphaIt <= 0 /* 20 */; alphaIt += 1) {
+//                float sqrtAlpha = alphaIt / 20.0; // The GGX roughness parameter.
+//                float alpha = sqrtAlpha * sqrtAlpha;
+//
+//                const vec3 N = vec3(0, 0, 1);
+//
+//                Microsurface *microsurface = new MicrosurfaceDielectric(false, false, alpha, alpha);
+//
+//                //            MatrixXf weightMatrix = MatrixXf::Zero(512, 5);
+//                //            VectorXf integralVector = VectorXf::Zero(512);
+//
+//
+//                for (u64 viewDirIt = 1; viewDirIt <= 128; viewDirIt += 1) {
+//                    const vec2 sample = vec2(sampleHalton(viewDirIt, 2), sampleHalton(viewDirIt, 3));
+//                    const vec3 V = sampleUniformHemisphere(sample.x, sample.y);
+//                    const float NdotV = V.z;
+//
+//                    vec3 mirrorReflectionDir = reflect(-V, N);
+//
+//                    double integrals[lobeDirCount] = { 0.0 };
+//                    {
+//                        const u64 sampleCount = 4096;
+//                        const double sampleScale = 1.0 / double(sampleCount);
+//
+//                        for (u64 sampleIt = 1; sampleIt <= sampleCount; sampleIt += 1) {
+//                            vec3 H = microsurface->sample(V);
+//                            vec3 lightDirectionTangent = reflect(-V, H);
+//
+//                            for (size_t lobeDirIt = 0; lobeDirIt < lobeDirCount; lobeDirIt += 1) {
+//                                // How much does the average reflected direction lie along the basis function?
+//                                double basis = 0.0;
+//                                {
+//                                    double dotProduct = max(dot(lightDirectionTangent, lobeDirs[lobeDirIt]), 0.f);
+//                                    double cos2 = dotProduct * dotProduct;
+//                                    double cos4 = cos2 * cos2;
+//                                    basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+//                                }
+//
+//                                integrals[lobeDirIt] += basis * sampleScale;
+//                            }
+//                        }
+//                    }
+//
+//
+//
+//                    for (size_t lobeDirIt = 0; lobeDirIt < lobeDirCount; lobeDirIt += 1) {
+//                        const vec3 vertex = lobeDirs[lobeDirIt];
+//                        const float vertexDotV = dot(V, vertex);
+//                        const float vertexDotN = vertex.z;
+//
+//                        float vertexDotR = dot(vertex, mirrorReflectionDir);
+//                        float vertexDotRSq = max(vertexDotR, 0.f) * max(vertexDotR, 0.f);
+//                        float basisInMirrorDir = 0.35 * vertexDotRSq + 0.25 * vertexDotRSq * vertexDotRSq;
+//
+//                        //                    specularLobeCoefficients << alpha << "," << NdotV << "," << vertexDotV << "," << vertexDotN << "," << integral << std::endl;
+//                        //                    specularLobeCoefficients << alpha << "," << vertexDotN << "," << integral << std::endl;
+//
+//                        std::cout << alpha << "," << NdotV << "," << vertexDotN << "," << vertexDotR << "," << basisInMirrorDir << "," << integrals[0] << std::endl;
+//                        specularLobeCoefficients << alpha << "," << NdotV << "," << vertexDotN << "," << vertexDotR << "," << basisInMirrorDir << "," << integrals[lobeDirIt] << std::endl;
+//
+//                        //                    weightMatrix(lobeDirIt, 0) = 1.0;
+//                        //                    weightMatrix(lobeDirIt, 1) = vertexDotN;
+//                        //                    weightMatrix(lobeDirIt, 2) = vertexDotN * vertexDotN;
+//                        //                    weightMatrix(lobeDirIt, 3) = vertexDotN * vertexDotN * vertexDotN;
+//                        //                    weightMatrix(lobeDirIt, 4) = vertexDotN * vertexDotN * vertexDotN * vertexDotN;
+//                        //
+//                        //                    integralVector[lobeDirIt] = (float)integral;
+//                    }
+//                }
+//
+//                delete microsurface;
+//            }
+//
+//            specularLobeCoefficients.close();
+    
+            {
+    
+                const size_t imageSize = 320;
+                Image ambientDiceLobeSpecularFull(imageSize * 16, imageSize * 20);
+    
+                const size_t vertexPositionCount = 16;
+                vec3 vertexPositions[vertexPositionCount];
+                for (size_t vertexPosIt = 0; vertexPosIt < vertexPositionCount; vertexPosIt += 1) {
+                    const float cosTheta = 1.f - 2.f * vertexPosIt / float(vertexPositionCount);
+                    vertexPositions[vertexPosIt] = vec3(0, sqrt(1.f - cosTheta * cosTheta), cosTheta);
+                }
+    
+                const vec3 normal = vec3(0, 0, 1);
+    
+                for (u64 alphaIt = 1; alphaIt <= 20; alphaIt += 1) {
+                    float sqrtAlpha = alphaIt / 20.0; // The GGX roughness parameter.
+                    float alpha = sqrtAlpha * sqrtAlpha;
+    
+                    Microsurface *microsurface = new MicrosurfaceConductor(false, false, alpha, alpha);
+    
+    
+                    Image ambientDiceLobeSpecular[vertexPositionCount];
+                    for (size_t vertexPosIt = 0; vertexPosIt < vertexPositionCount; vertexPosIt += 1) {
+                        ambientDiceLobeSpecular[vertexPosIt] = Image(imageSize, imageSize);
+                    }
+    
+                    parallelFor(0u, uint32(imageSize * imageSize), [&](u32 i)
+                                {
+                                    u32 y = i / imageSize;
+                                    u32 x = i % imageSize;
+                                    vec2 coord = vec2(2.0) * vec2(x, y) / vec2(imageSize) - vec2(1.0);
+    
+                                    if (dot(coord, coord) > 1.0) {
+                                        for (size_t vertexPosIt = 0; vertexPosIt < vertexPositionCount; vertexPosIt += 1) {
+                                            ambientDiceLobeSpecular[vertexPosIt].at(x, y) = vec4(0.0);
+                                        }
+                                        return;
+                                    }
+    
+                                    vec3 V = vec3(coord, sqrt(1.0 - dot(coord, coord)));
+    
+    //                                vec2 coord = vec2(x, y) / vec2(imageSize);
+    //                                float cosThetaV = coord.x;
+    //                                float cosPhiV = 1.f - 2.f * coord.y;
+    //                                float sinThetaV = sqrt(1.f - cosThetaV * cosThetaV);
+    //                                float sinPhiV = sqrt(1.f - cosPhiV * cosPhiV);
+    //
+    //                                vec3 V = vec3(sinPhiV * sinThetaV, cosPhiV * sinThetaV, cosThetaV);
+    
+                                    const uint sampleCount = 4096u;
+                                    const float sampleScale = 1.0 / float(sampleCount);
+    
+                                    vec2 integrals[vertexPositionCount] = { vec2(0.0) }; // for f0 and f90MinusF0
+    
+                                    vec2 lutValue = vec2(0.0); // for f0 and f90MinusF0
+                                    for (uint sampleIt = 0u; sampleIt < sampleCount; sampleIt += 1u) {
+    //                                    vec3 lightDirectionTangent = microsurface->sample(V);
+    //                                    vec3 H = normalize(V + lightDirectionTangent);
+    //
+    //                                    float f0Weight = 1.f;
+    //                                    float f90MinusF0Weight = pow(1.f - saturate(dot(V, H)), 5.f);  //native_powr(1.f - u, 5.f);
+    //
+    //                                    vec2 brdf = vec2(f0Weight, f90MinusF0Weight);
+    //                                    assert(lightDirectionTangent.z >= 0.f);
+    
+                                        vec2 sampleUV = vec2(sampleHalton(sampleIt + 1, 2), sampleHalton(sampleIt + 1, 3));
+                                        vec3 H = sampleGGXVNDF(V, alpha, alpha, sampleUV.x, sampleUV.y); // depends on viewDirTheta, viewDirPhi
+                                        vec3 lightDirectionTangent = reflect(-V, H); // depends on viewDirTheta, viewDirPhi
+                                        if (lightDirectionTangent.z < 0) { continue; }
+    
+                                        //Specular
+                                        float Vis = SmithGGXMaskingShadowingG2OverG1Reflection(V, lightDirectionTangent, H, alpha); // depends on viewDirTheta, viewDirPhi
+                                        float f0Weight = 1.f;
+                                        float f90MinusF0Weight = pow(1.f - saturate(dot(V, H)), 5.f);
+    
+                                        vec2 brdf = vec2(f0Weight, f90MinusF0Weight) * Vis;
+    
+                                        for (size_t vertexPosIt = 0; vertexPosIt < vertexPositionCount; vertexPosIt += 1) {
+                                            // How much does the average reflected direction lie along the basis function?
+                                            float basis = 0.0;
+                                            {
+                                                float dotProduct = max(dot(lightDirectionTangent, vertexPositions[vertexPosIt]), 0.f);
+                                                float cos2 = dotProduct * dotProduct;
+                                                float cos4 = cos2 * cos2;
+                                                basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+                                            }
+    
+                                            integrals[vertexPosIt] += brdf * basis * sampleScale;
+                                        }
+                                        lutValue += brdf * sampleScale; // * lightDirectionTangent.z;
+                                    }
+    
+                                    // integral /= lutValue;
+    
+                                    const float parameters[10] = { -0.03480017115306019, 1.5767277269939315, 3.2915521747760006, -8.886052306193424, 5.289174934167271, 0.658318188157326, -0.9258960547724002, 2.9786527829025813, -2.0077225608393703, 0.2642150798240006 };
+                                    
+                                    for (size_t vertexPosIt = 0; vertexPosIt < vertexPositionCount; vertexPosIt += 1) {
+    //                                    integrals[vertexPosIt] = estimateSRBFBasisWeightGGXCustomFit(alpha, vertexPositions[vertexPosIt], normal, V);
+                                        vec3 R = reflect(-V, vec3(0, 0, 1));
+                                        float dotProduct = dot(vertexPositions[vertexPosIt], R);
+                                        float cos2 = square(max(dotProduct, 0.f));
+                                        float cos4 = cos2 * cos2;
+                                        float basisInMirrorDir = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+                                        
+                                        float focusLerp = parameters[5] + parameters[6] * alpha + parameters[7] * alpha * alpha + parameters[8] * alpha * alpha * alpha + parameters[9] * alpha * alpha * alpha * alpha;
+                                        float diffuseParam = mix(dotProduct, vertexPositions[vertexPosIt].z, saturate(focusLerp));
+                                        float diffuse = 0.06 + 0.129 * diffuseParam + 0.0697 * diffuseParam * diffuseParam;
+                                        
+                                        float alphaLerp = parameters[0] + parameters[1] * alpha + parameters[2] * alpha * alpha + parameters[3] * alpha * alpha * alpha + parameters[4] * alpha * alpha * alpha * alpha;
+                                        
+                                        float value = mix(basisInMirrorDir, diffuse, saturate(alphaLerp));
+    
+                                        ambientDiceLobeSpecular[vertexPosIt].at(x, y) = vec4(value * lutValue.x, value * lutValue.y, 0, 1.0);
+//                                        ambientDiceLobeSpecular[vertexPosIt].at(x, y) =  vec4(integrals[vertexPosIt].x, integrals[vertexPosIt].y, 0, 1.0);
+                                    }
+                                });
+    
+    
+                    for (size_t vertexPosIt = 0; vertexPosIt < vertexPositionCount; vertexPosIt += 1) {
+                        const float theta = vertexPosIt / float(vertexPositionCount) * M_PI;
+                        std::string fileName = "AmbientDiceSSSpecular-alpha=" + std::to_string(alpha) + "-lobeTheta=" + std::to_string(theta) + ".hdr";
+//                        ambientDiceLobeSpecular[vertexPosIt].writeHdr(fileName.c_str());
+    
+                        ambientDiceLobeSpecularFull.paste(ambientDiceLobeSpecular[vertexPosIt], ivec2(imageSize * vertexPosIt, imageSize * (alphaIt - 1)));
+                    }
+    
+                    delete microsurface;
+                }
+    
+                std::string fileName = "AmbientDiceSSSpecularFullApproxSimple.hdr";
+                ambientDiceLobeSpecularFull.writeHdr(fileName.c_str());
+            }
+
     }
     
     void ExperimentAmbientDice::run(SharedData& data)
@@ -1400,136 +2281,138 @@ namespace Probulator {
         
         using namespace Eigen;
         
-//        MatrixXd bezierGram = AmbientDice::computeGramMatrixBezier();
-//        MatrixXd srbfGram = AmbientDice::computeGramMatrixSRBF();
-//
-//        std::cout << "const float ambientDiceGramBezier[36][36] = {\n";
-//        for (u64 i = 0; i < 36; i += 1) {
-//            std::cout << "    { ";
-//
-//            for (u64 j = 0; j < 36; j += 1) {
-//                std::cout << bezierGram(i, j) << ", ";
-//            }
-//            std::cout << "},\n";
-//        }
-//        std::cout << "}\n";
-//
-//        std::cout << "const float ambientDiceGramSRBF[12][12] = {\n";
-//        for (u64 i = 0; i < 12; i += 1) {
-//            std::cout << "    { ";
-//
-//            for (u64 j = 0; j < 12; j += 1) {
-//                std::cout << srbfGram(i, j) << ", ";
-//            }
-//            std::cout << "},\n";
-//        }
-//        std::cout << "}\n";
-
+        //        MatrixXd bezierGram = AmbientDice::computeGramMatrixBezier();
         
-//        std::cout << "alpha";
-//        for (u64 i = 0; i < 36; i += 1) {
-//            for (u64 j = i; j < 36; j += 1) {
-//                std::cout << ",coeff" << i << "-" << j;
-//            }
-//        }
-//        std::cout << std::endl;
-//
-//        MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixBezier());
-//        MatrixXd diffuseMatrix = inverseGram * computeCosineGramMatrixBezier();
-//
-//        for (u64 i = 1; i <= 20; i += 1) {
-//            double sqrtAlpha = double(i) / 20.0;
-//            double alpha = sqrtAlpha * sqrtAlpha;
-//
-//            std::cout << alpha;
-//
-//            MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixBezier(alpha, false);
-//
-//            for (u64 i = 0; i < 36; i += 1) {
-//                for (u64 j = i; j < 36; j += 1) {
-//                    double val = resultMatrix(i, j);
-//
-//                    std::cout << "," << val;
-//                }
-//            }
-//
-//            std::cout << std::endl;
-//        }
+        //        std::cout << "const float ambientDiceGramBezier[36][36] = {\n";
+        //        for (u64 i = 0; i < 36; i += 1) {
+        //            std::cout << "    { ";
+        //
+        //            for (u64 j = 0; j < 36; j += 1) {
+        //                std::cout << bezierGram(i, j) << ", ";
+        //            }
+        //            std::cout << "},\n";
+        //        }
+        //        std::cout << "}\n";
         
+        
+        //        MatrixXd srbfGram = AmbientDice::computeGramMatrixSRBF();
+        //        MatrixXd srbfGramInverse = pseudoInverse(srbfGram);
+        //
+        //        std::cout << "const float ambientDiceGramSRBFInverse[12][12] = {\n";
+        //        for (u64 i = 0; i < 12; i += 1) {
+        //            std::cout << "    { ";
+        //
+        //            for (u64 j = 0; j < 12; j += 1) {
+        //                std::cout << srbfGramInverse(i, j) << ", ";
+        //            }
+        //            std::cout << "},\n";
+        //        }
+        //        std::cout << "}\n";
+        
+        
+        //        std::cout << "alpha";
+        //        for (u64 i = 0; i < 36; i += 1) {
+        //            for (u64 j = i; j < 36; j += 1) {
+        //                std::cout << ",coeff" << i << "-" << j;
+        //            }
+        //        }
+        //        std::cout << std::endl;
+        //
+        //        MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixBezier());
+        //        MatrixXd diffuseMatrix = inverseGram * computeCosineGramMatrixBezier();
+        //
+        //        for (u64 i = 1; i <= 20; i += 1) {
+        //            double sqrtAlpha = double(i) / 20.0;
+        //            double alpha = sqrtAlpha * sqrtAlpha;
+        //
+        //            std::cout << alpha;
+        //
+        //            MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixBezier(alpha, false);
+        //
+        //            for (u64 i = 0; i < 36; i += 1) {
+        //                for (u64 j = i; j < 36; j += 1) {
+        //                    double val = resultMatrix(i, j);
+        //
+        //                    std::cout << "," << val;
+        //                }
+        //            }
+        //
+        //            std::cout << std::endl;
+        //        }
         
         m_radianceImage = Image(data.m_outputSize);
         m_specularImage = Image(data.m_outputSize);
         m_irradianceImage = Image(data.m_outputSize);
         
-        //        compareResponseImages(data);
+        
+        //        std::cout << "theta,costheta,integral" << std::endl;
+        //
+        //        for (u64 angleIt = 0; angleIt < 600.0; angleIt += 1) {
+        //            float theta = angleIt / 600.0f * M_PI; // The angle between the vertex and the sample direction.
+        //
+        //            const vec3 lobeDirection = vec3(0, 0, 1);
+        //            vec3 normal = vec3(sin(theta), 0, cos(theta));
+        //
+        //            const u64 sampleCount = 2048;
+        //            const double sampleScale = 2 * M_PI / double(sampleCount);
+        //
+        //            //                  double integral = 0.0;
+        //            //                  for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
+        //            //                      vec3 sDirection = sampleUniformSphere(sampleHammersley(sampleIt, sampleCount));
+        //            //
+        //            //                      double dotProduct = max(dot(sDirection, vertexDir), 0.0f);
+        //            //                      double cos2 = dotProduct * dotProduct;
+        //            //                      double cos4 = cos2 * cos2;
+        //            //
+        //            //                      double basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+        //            //
+        //            //                      double brdf = max(dot(sDirection, direction), 0.f) * M_1_PI;
+        //            //
+        //            //                      integral += brdf * basis * sampleScale;
+        //            //                  }
+        //            //
+        //            double integral = 0.0;
+        //            for (u64 sampleIt = 0; sampleIt < sampleCount; sampleIt += 1) {
+        //                vec3 lightDirection = sampleUniformHemisphere(sampleHalton(sampleIt + 1, 2), sampleHalton(sampleIt + 1, 3));
+        //
+        //                double dotProduct = lightDirection.z; // == dot(lobeDirection, lightDirection) since the vertex is (0, 0, 1). Strictly positive since we're sampling the hemisphere.
+        //                double cos2 = dotProduct * dotProduct;
+        //                double cos4 = cos2 * cos2;
+        //
+        //                double basis = 0.7f * (0.5f * cos2) + 0.3f * (5.f / 6.f * cos4);
+        //
+        //                double brdf = max(dot(lightDirection, normal), 0.f) * M_1_PI;
+        //
+        //                integral += brdf * basis * sampleScale;
+        //            }
+        //
+        //            std::cout << theta << "," << cos(theta) << "," << integral << std::endl;
+        //        }
+        
+        //
+        ////            VectorXf polynomialCoeffs = weightMatrix.colPivHouseholderQr().solve(integralVector);
+        ////            std::cout << alpha << "," << polynomialCoeffs[0] << "," << polynomialCoeffs[1] << "," << polynomialCoeffs[2] << "," << polynomialCoeffs[3] << "," << polynomialCoeffs[4] << std::endl;
+        //
+        //
+        //
+        //        specularLobeCoefficients.close();
+        
         
         if (m_diceType == AmbientDiceTypeBezier) {
-            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_radianceImage);
+            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquaresBezier(data.m_directionImage, m_input->m_radianceImage);
             
-//            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_specularImage);
+            //            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_specularImage);
             AmbientDice ambientDiceSpecular = ambientDiceConvertRadianceToSpecularBezier(ambientDiceRadiance);
             
             //            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquares(data.m_directionImage, m_input->m_irradianceImage);
             AmbientDice ambientDiceIrradiance = ambientDiceConvertRadianceToIrradianceBezier(ambientDiceRadiance);
             
-//            std::cout << "alpha";
-//            for (u64 i = 0; i < 12; i += 1) {
-//                for (u64 j = 0; j < 3; j += 1) {
-//                    std::cout << ",vert" << i << "-" << j;
-//                }
-//            }
-//            std::cout << std::endl;
-//    
-//            MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixBezier());
-//    
-//            for (u64 i = 1; i <= 20; i += 1) {
-//                double sqrtAlpha = double(i) / 20.0;
-//                double alpha = sqrtAlpha * sqrtAlpha;
-//    
-//                std::cout << alpha;
-//    
-//                MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixBezier(alpha, false);
-//                
-//                AmbientDice specular = { };
-//                
-//                for (u64 vert = 0; vert < 12; vert += 1) {
-//                    for (u64 otherVert = 0; otherVert < 12; otherVert += 1) {
-//                        specular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(3 * vert, 3 * otherVert);
-//                        specular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].directionalDerivativeU * (float)resultMatrix(3 * vert, 3 * otherVert + 1);
-//                        specular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].directionalDerivativeV * (float)resultMatrix(3 * vert, 3 * otherVert + 2);
-//                        
-//                        specular.vertices[vert].directionalDerivativeU += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(3 * vert + 1, 3 * otherVert);
-//                        specular.vertices[vert].directionalDerivativeU += ambientDiceRadiance.vertices[otherVert].directionalDerivativeU * (float)resultMatrix(3 * vert + 1, 3 * otherVert + 1);
-//                        specular.vertices[vert].directionalDerivativeU += ambientDiceRadiance.vertices[otherVert].directionalDerivativeV * (float)resultMatrix(3 * vert + 1, 3 * otherVert + 2);
-//                        
-//                        specular.vertices[vert].directionalDerivativeV += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(3 * vert + 2, 3 * otherVert);
-//                        specular.vertices[vert].directionalDerivativeV += ambientDiceRadiance.vertices[otherVert].directionalDerivativeU * (float)resultMatrix(3 * vert + 2, 3 * otherVert + 1);
-//                        specular.vertices[vert].directionalDerivativeV += ambientDiceRadiance.vertices[otherVert].directionalDerivativeV * (float)resultMatrix(3 * vert + 2, 3 * otherVert + 2);
-//                    }
-//                }
-//    
-//                for (u64 i = 0; i < 12; i += 1) {
-//                    std::cout << "," << (specular.vertices[i].value.g - ambientDiceRadiance.vertices[i].value.g) / (ambientDiceIrradiance.vertices[i].value.g - ambientDiceRadiance.vertices[i].value.g);
-//                    std::cout << "," << (specular.vertices[i].directionalDerivativeU.g - ambientDiceRadiance.vertices[i].directionalDerivativeU.g) / (ambientDiceIrradiance.vertices[i].directionalDerivativeU.g - ambientDiceRadiance.vertices[i].directionalDerivativeU.g);
-//                    std::cout << "," << (specular.vertices[i].directionalDerivativeV.g - ambientDiceRadiance.vertices[i].directionalDerivativeV.g) / (ambientDiceIrradiance.vertices[i].directionalDerivativeV.g - ambientDiceRadiance.vertices[i].directionalDerivativeV.g);
-//                }
-//    
-//                std::cout << std::endl;
-//            }
-
-            
-            //        float radianceFactor = 1.f - sqrt(ggxAlpha);
-            //        float irradianceFactor = 1.f - radianceFactor;
-            //
-            //        for (u32 i = 0; i < 12; i += 1) {
-            //
-            //            ambientDiceSpecular.vertices[i].value = ambientDiceRadiance.vertices[i].value * radianceFactor + ambientDice.vertices[i].value * irradianceFactor;
-            //            ambientDiceSpecular.vertices[i].directionalDerivativeU = ambientDiceRadiance.vertices[i].directionalDerivativeU * radianceFactor + ambientDice.vertices[i].directionalDerivativeU * irradianceFactor;
-            //            ambientDiceSpecular.vertices[i].directionalDerivativeV = ambientDiceRadiance.vertices[i].directionalDerivativeV * radianceFactor + ambientDice.vertices[i].directionalDerivativeV * irradianceFactor;
-            //        }
-            
             data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                               {
+                                                  if (upperHemisphereOnly && direction.z < 0) {
+                                                      return;
+                                                  }
+                                                  
                                                   vec3 sampleRadiance = ambientDiceRadiance.evaluateBezier(direction);
                                                   m_radianceImage.at(pixelPos) = vec4(sampleRadiance, 1.0f);
                                                   
@@ -1539,24 +2422,189 @@ namespace Probulator {
                                                   vec3 sampleSpecular = ambientDiceSpecular.evaluateBezier(direction);
                                                   m_specularImage.at(pixelPos) = vec4(sampleSpecular, 1.0f);
                                               });
-        } else /* if (m_diceType == AmbientDiceTypeSRBF) */ {
-            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_radianceImage);
+        } else if (m_diceType == AmbientDiceTypeBezierYCoCg) {
+            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquaresBezierYCoCg(data.m_directionImage, m_input->m_radianceImage);
             
-//            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_specularImage);
-            AmbientDice ambientDiceSpecular = ambientDiceConvertRadianceToSpecularSRBF(ambientDiceRadiance);
+            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquaresBezierYCoCg(data.m_directionImage, m_input->m_specularImage);
+            //            AmbientDice ambientDiceSpecular = ambientDiceConvertRadianceToSpecularBezier(ambientDiceRadiance);
             
-//            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_irradianceImage);
-            AmbientDice ambientDiceIrradiance = ambientDiceConvertRadianceToIrradianceSRBF(ambientDiceRadiance);
+            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquaresBezierYCoCg(data.m_directionImage, m_input->m_irradianceImage);
+            //            AmbientDice ambientDiceIrradiance = ambientDiceConvertRadianceToIrradianceBezier(ambientDiceRadiance);
             
             data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                               {
+                                                  if (upperHemisphereOnly && direction.z < 0) {
+                                                      return;
+                                                  }
+                                                  vec3 sampleRadiance = ambientDiceRadiance.evaluateBezierYCoCg(direction);
+                                                  m_radianceImage.at(pixelPos) = vec4(sampleRadiance, 1.0f);
+                                                  
+                                                  vec3 sampleIrradiance = ambientDiceIrradiance.evaluateBezierYCoCg(direction);
+                                                  m_irradianceImage.at(pixelPos) = vec4(sampleIrradiance, 1.0f);
+                                                  
+                                                  vec3 sampleSpecular = ambientDiceSpecular.evaluateBezierYCoCg(direction);
+                                                  m_specularImage.at(pixelPos) = vec4(sampleSpecular, 1.0f);
+                                              });
+            
+        } else /* if (m_diceType == AmbientDiceTypeSRBF) */ {
+            
+            AmbientDice ambientDiceRadiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_radianceImage);
+            
+//            for (u64 i = 0; i <= 10; i += 1) {
+//                float alphaSqrt = (float)i / 10.f + 1e-3f;
+//                float alpha = alphaSqrt * alphaSqrt;
+//
+//                const float f0 = 0.8f;
+//
+//                const vec3 N = vec3(0, 0, 1);
+//
+//                Image specularImageSRBFGT = Image(data.m_outputSize);
+//                Image specularImageSRBFApprox = Image(data.m_outputSize);
+//
+//                data.m_directionImage.forPixels2D([&](const vec3& V, ivec2 pixelPos)
+//                                                  {
+//                                                      vec3 total = vec3(0.f);
+//                                                      vec3 totalApprox = vec3(0.f);
+//                                                      for (size_t i = 0; i < 9; i += 1) {
+//                                                          const vec3 vertexDir = AmbientDice::srbfHemisphereVertexPositions[i];
+//                                                          vec2 integral = evaluateSRBFBasisWeightGGX(alpha, vertexDir, N, V);
+//                                                          vec2 approxIntegral = estimateSRBFBasisWeightGGXCustomFit(alpha, vertexDir, N, V);
+//
+//                                                          total += (integral.x * f0 + integral.y) * ambientDiceRadiance.vertices[i].value;
+//                                                          totalApprox += (approxIntegral.x * f0 + approxIntegral.y) * ambientDiceRadiance.vertices[i].value;
+//                                                      }
+//
+//                                                      specularImageSRBFGT.at(pixelPos) = vec4(total, 1.0f);
+//                                                      specularImageSRBFApprox.at(pixelPos) = vec4(totalApprox, 1.0f);
+//                                                  });
+//
+//                {
+//                    std::string hdrFileName = "specularImageSRBF-Alpha" + std::to_string(alpha) + "-GT.hdr";
+//                    std::string pngFileName = "specularImageSRBF-Alpha" + std::to_string(alpha) + "-GT.png";
+//                    specularImageSRBFGT.writeHdr(hdrFileName.c_str());
+//                    specularImageSRBFGT.writePng(pngFileName.c_str());
+//                }
+//
+//                {
+//                    std::string hdrFileName = "specularImageSRBF-Alpha" + std::to_string(alpha) + "-Approx.hdr";
+//                    std::string pngFileName = "specularImageSRBF-Alpha" + std::to_string(alpha) + "-Approx.png";
+//                    specularImageSRBFApprox.writeHdr(hdrFileName.c_str());
+//                    specularImageSRBFApprox.writePng(pngFileName.c_str());
+//                }
+//            }
+            //        exit(0);
+            
+            std::cout << "Ambient Dice Inverse Gram:" << std::endl;
+            
+            std::cout << pseudoInverse(AmbientDice::computeGramMatrixSRBF()) << std::endl;
+            
+            std::cout << std::endl;
+            
+            AmbientDice ambientDiceIrradiance = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_irradianceImage);
+//            AmbientDice ambientDiceIrradiance = ambientDiceConvertRadianceToIrradianceSRBF(ambientDiceRadiance);
+            
+            if (false) {
+                std::cout << "alpha,lerpFactor" << std::endl;
+                
+                MatrixXd inverseGram = pseudoInverse(AmbientDice::computeGramMatrixSRBF(hemisphericalIntegral));
+                
+                for (u64 i = 1; i <= 40; i += 1) {
+                    double sqrtAlpha = double(i) / 40.0;
+                    double alpha = sqrtAlpha * sqrtAlpha;
+                    
+                    MatrixXd resultMatrix = inverseGram * computeGGXGramMatrixSRBF(alpha, false);
+                    
+                    AmbientDice trueSpecular = { };
+                    
+                    for (u64 vert = 0; vert < vertexCount; vert += 1) {
+                        for (u64 otherVert = 0; otherVert < vertexCount; otherVert += 1) {
+                            trueSpecular.vertices[vert].value += ambientDiceRadiance.vertices[otherVert].value * (float)resultMatrix(vert, otherVert);
+                        }
+                    }
+                    
+                    double bestLerpFactor = 0.0;
+                    double bestError = DBL_MAX;
+                    for (u64 i = 0; i <= 40; i += 1) {
+                        double lerpFactor = double(i) / 40.0;
+                        
+                        double error = 0.0;
+                        for (u64 vert = 0; vert < vertexCount; vert += 1) {
+                            vec3 delta = mix(ambientDiceRadiance.vertices[vert].value, ambientDiceIrradiance.vertices[vert].value, lerpFactor) - trueSpecular.vertices[vert].value;
+                            error += dot(delta * delta, vec3(0.333333));
+                        }
+                        if (error < bestError) {
+                            bestError = error;
+                            bestLerpFactor = lerpFactor;
+                        }
+                    }
+                    
+                    std::cout << alpha << "," << bestLerpFactor << std::endl;
+                }
+            }
+            
+            AmbientDice ambientDiceSpecular = solveAmbientDiceLeastSquaresSRBF(data.m_directionImage, m_input->m_specularImage);
+            //            AmbientDice ambientDiceSpecular = ambientDiceConvertRadianceToSpecularSRBF(ambientDiceRadiance);
+            
+            
+            data.m_directionImage.forPixels2D([&](const vec3& direction, ivec2 pixelPos)
+                                              {
+                                                  if (upperHemisphereOnly && direction.z < 0) {
+                                                      return;
+                                                  }
+                                                  
                                                   vec3 sampleRadiance = ambientDiceRadiance.evaluateSRBF(direction);
                                                   m_radianceImage.at(pixelPos) = vec4(sampleRadiance, 1.0f);
                                                   
-                                                  vec3 sampleIrradiance = ambientDiceIrradiance.evaluateSRBF(direction);
+                                                  vec3 sampleIrradiance = vec3(0.f); // ambientDiceIrradiance.evaluateSRBF(direction);
+                                                  if (upperHemisphereOnly && useHemisphereVertexPositions) {
+                                                      for (u64 vert = 0; vert < 9; vert += 1) {
+                                                          // estimateSRBFBasisWeightGGXCustomFit
+                                                          float dotProduct = dot(AmbientDice::srbfHemisphereVertexPositions[vert], direction);
+                                                          float w0 = 0.06f + 0.129f * dotProduct + 0.0697 * dotProduct * dotProduct; // 2 * vert
+                                                          
+                                                          sampleIrradiance += w0 * ambientDiceRadiance.vertices[vert].value;
+                                                      }
+                                                  } else {
+                                                        for (u64 vert = 0; vert < 6; vert += 1) {
+                                                  
+                                                            float dotProduct = dot(AmbientDice::srbfNormalisedVertexPositions[vert], direction);
+                                                  
+                                                            float w0 = 0.06f + 0.129f * dotProduct + 0.0697 * dotProduct * dotProduct; // 2 * vert
+                                                            float w1 = 0.06f + 0.129f * -dotProduct + 0.0697 * dotProduct * dotProduct; // 2 * vert + 1
+                                                  
+                                                            sampleIrradiance += w0 * ambientDiceRadiance.vertices[2 * vert].value;
+                                                            sampleIrradiance += w1 * ambientDiceRadiance.vertices[2 * vert + 1].value;
+                                                        }
+                                                  }
+                                                  
                                                   m_irradianceImage.at(pixelPos) = vec4(sampleIrradiance, 1.0f);
                                                   
-                                                  vec3 sampleSpecular = ambientDiceSpecular.evaluateSRBF(direction);
+                                                  vec3 sampleSpecular = vec3(0.f); // ambientDiceSpecular.evaluateSRBF(direction);
+                                                  if (direction.z < 0 && upperHemisphereOnly) {
+                                                      sampleSpecular = vec3(0);
+                                                  }
+                                                  
+                                                vec3 V = upperHemisphereOnly ? vec3(-direction.x, -direction.y, direction.z) : direction;
+
+                                                if (upperHemisphereOnly && useHemisphereVertexPositions) {
+                                                    for (u64 vert = 0; vert < 9; vert += 1) {
+                                                        // estimateSRBFBasisWeightGGXCustomFit
+                                                        vec2 w0 = estimateSRBFBasisWeightGGXCustomFit(ggxAlpha, AmbientDice::srbfHemisphereVertexPositions[vert], vec3(0, 0, 1), V);
+
+                                                        sampleSpecular += (w0.x * specularF0 + w0.y) * ambientDiceRadiance.vertices[vert].value;
+                                                    }
+                                                } else {
+                                                    for (u64 vert = 0; vert < 6; vert += 1) {
+                                                        // estimateSRBFBasisWeightGGXCustomFit
+                                                        vec2 w0 = estimateSRBFBasisWeightGGXCustomFit(ggxAlpha, AmbientDice::srbfNormalisedVertexPositions[vert], upperHemisphereOnly ? vec3(0, 0, 1) : direction, V);
+                                                        vec2 w1 = estimateSRBFBasisWeightGGXCustomFit(ggxAlpha, -AmbientDice::srbfNormalisedVertexPositions[vert], upperHemisphereOnly ? vec3(0, 0, 1) : direction, V);
+
+                                                        sampleSpecular += (w0.x * specularF0 + w0.y) * ambientDiceRadiance.vertices[2 * vert].value;
+                                                        sampleSpecular += (w1.x * specularF0 + w1.y) * ambientDiceRadiance.vertices[2 * vert + 1].value;
+                                                    }
+                                                }
+                                                  
+                                                  
                                                   m_specularImage.at(pixelPos) = vec4(sampleSpecular, 1.0f);
                                               });
         }

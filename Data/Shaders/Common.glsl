@@ -8,8 +8,8 @@ uniform vec2 uResolution;
 
 vec2 cartesianToLatLongTexcoord(vec3 p)
 {
-	float u = (1.0 + atan(p.x, -p.z) / PI);
-	float v = acos(p.y) / PI;
+	float u = (1.0 + atan(p.x, -p.y) / PI);
+	float v = acos(p.z) / PI;
 	return vec2(u * 0.5, v);
 }
 

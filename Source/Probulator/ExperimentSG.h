@@ -55,9 +55,21 @@ public:
         std::vector<vec3> sgLobeDirections(m_lobeCount);
 
         m_lobes.resize(m_lobeCount);
+        
+        vec3 lobePositions[9] = {
+            vec3(-0.8506508083520399, -0.49112347318842303, -0.18759247408507987),
+            vec3(0.0, -0.982246946376846, 0.1875924740850799),
+            vec3(0.0, 0.982246946376846, -0.1875924740850799),
+            vec3(0.5257311121191337, -0.30353099910334314, 0.7946544722917661),
+            vec3(0.0, 0.6070619982066864, 0.7946544722917661),
+            vec3(-0.5257311121191337, -0.30353099910334314, 0.7946544722917661),
+            vec3(0.8506508083520399, -0.49112347318842303, -0.18759247408507987),
+            vec3(0.8506508083520399, 0.49112347318842303, 0.18759247408507987),
+            vec3(-0.8506508083520399, 0.49112347318842303, 0.18759247408507987) };
+        
         for (u32 lobeIt = 0; lobeIt < m_lobeCount; ++lobeIt)
         {
-            sgLobeDirections[lobeIt] = sampleVogelsSphere(lobeIt, m_lobeCount);
+            sgLobeDirections[lobeIt] = sampleVogelsSphere(lobeIt, upperHemisphereOnly ? m_lobeCount * 2 : m_lobeCount);
 
             m_lobes[lobeIt].p = sgLobeDirections[lobeIt];
             m_lobes[lobeIt].lambda = m_lambda;
@@ -74,7 +86,7 @@ public:
         }
         
 //        m_lobeCount = 12;
-//        m_lambda = 3.4f;
+////        m_lambda = 3.4f;
 //
 //        const float kT = 0.618034f;
 //
@@ -97,7 +109,7 @@ public:
 //        for (u32 lobeIt = 0; lobeIt < m_lobeCount; ++lobeIt)
 //        {
 //            m_lobes[lobeIt].p = normalize(vertexPositions[lobeIt]);
-//            m_lobes[lobeIt].lambda = m_lambda;
+////            m_lobes[lobeIt].lambda = m_lambda;
 //            m_lobes[lobeIt].mu = vec3(0.0f);
 //        }
 
@@ -114,6 +126,7 @@ protected:
         m_radianceImage.forPixels2D([&](vec4& pixel, ivec2 pixelPos)
         {
             vec3 direction = data.m_directionImage.at(pixelPos);
+            if (upperHemisphereOnly && direction.z < 0.f) { return; }
             vec3 sampleSg = sgBasisEvaluate(m_lobes, direction);
             pixel = vec4(sampleSg, 1.0f);
         });
@@ -126,6 +139,8 @@ protected:
         m_irradianceImage.forPixels2D([&](vec4& pixel, ivec2 pixelPos)
         {
             vec3 normal = data.m_directionImage.at(pixelPos);
+            if (upperHemisphereOnly && normal.z < 0.f) { return; }
+            
             vec3 sampleSg = sgBasisIrradianceFitted(m_lobes, normal);
             pixel = vec4(sampleSg, 1.0f);
         });
@@ -138,10 +153,10 @@ protected:
         m_specularImage.forPixels2D([&](vec4& pixel, ivec2 pixelPos)
                                       {
                                           
-                                          if (specularFixedNormal) {
-                                              vec3 normal = vec3(0, 1, 0);
+                                          if (upperHemisphereOnly) {
+                                              vec3 normal = vec3(0, 0, 1);
                                               vec3 R = data.m_directionImage.at(pixelPos);
-                                              if (R.y < 0.f) {
+                                              if (R.z < 0.f) {
                                                   pixel = vec4(0, 0, 0, 1);
                                                   return;
                                               }
@@ -151,7 +166,7 @@ protected:
                                               vec3 sampleSG = vec3(0.f);
                                               
                                               for (const SphericalGaussian &lobe : m_lobes) {
-                                                  sampleSG += sgGGXSpecular(lobe, normal, ggxAlpha, V, vec3(1.f));
+                                                  sampleSG += sgGGXSpecular(lobe, normal, ggxAlpha, V, vec3(specularF0));
                                               }
                                               pixel = vec4(sampleSG, 1.0f);
                                           } else {
@@ -160,7 +175,7 @@ protected:
                                               vec3 sampleSG = vec3(0.f);
                                               
                                               for (const SphericalGaussian &lobe : m_lobes) {
-                                                  sampleSG += sgGGXSpecular(lobe, normal, ggxAlpha, normal, vec3(1.f));
+                                                  sampleSG += sgGGXSpecular(lobe, normal, ggxAlpha, normal, vec3(specularF0));
                                               }
                                               pixel = vec4(sampleSG, 1.0f);
                                           }
@@ -355,6 +370,10 @@ public:
         
         
         for (const RadianceSample& sample : radianceSamples) {
+            if (upperHemisphereOnly && sample.direction.z < 0.f) {
+                continue;
+            }
+            
             const float sampleWeight = 1.f;
             totalSampleWeight += sampleWeight;
             float sampleWeightScale = sampleWeight / totalSampleWeight;

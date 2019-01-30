@@ -4,7 +4,7 @@
 
 namespace Probulator
 {
-	SgBasis sgFitLeastSquares(const SgBasis& basis, const std::vector<RadianceSample>& samples)
+	SgBasis sgFitLeastSquaresOld(const SgBasis& basis, const std::vector<RadianceSample>& samples)
 	{
 		using namespace Eigen;
 		SgBasis result = basis;
@@ -38,7 +38,7 @@ namespace Probulator
 		return result;
 	}
     
-    SgBasis sgFitLeastSquaresMoments(const SgBasis& basis, const std::vector<RadianceSample>& samples)
+    SgBasis sgFitLeastSquares(const SgBasis& basis, const std::vector<RadianceSample>& samples)
     {
         
         printf("Lobe directions:\n");
@@ -52,6 +52,8 @@ namespace Probulator
         using namespace Eigen;
         SgBasis result = basis;
         
+        const float sampleScale = (hemisphericalIntegral ? 2 * M_PI : 4 * M_PI) / float(samples.size());
+        
         MatrixXf gram;
         gram.resize(basis.size(), basis.size());
         for (u64 lobeAIt = 0; lobeAIt < basis.size(); ++lobeAIt)
@@ -63,10 +65,8 @@ namespace Probulator
                 for (const RadianceSample &sample : samples) {
                     float lobeAWeight = exp(basis[lobeAIt].lambda * (dot(sample.direction, basis[lobeAIt].p) - 1.0));
                     float lobeBWeight = exp(basis[lobeBIt].lambda * (dot(sample.direction, basis[lobeBIt].p) - 1.0));
-                    integral += lobeAWeight * lobeBWeight; // * 4 * .pi
+                    integral += lobeAWeight * lobeBWeight * sampleScale; // * 4 * .pi
                 }
-                
-                integral *= 4 * M_PI / float(samples.size());
                 
                 gram(lobeAIt, lobeBIt) = integral;
                 gram(lobeBIt, lobeAIt) = integral;
@@ -141,7 +141,7 @@ namespace Probulator
                     float weight = exp(basis[lobeIt].lambda * (dot(samples[sampleIt].direction, basis[lobeIt].p) - 1.0));
                     lobeTotal += sample * weight;
                 }
-                rawMoments[lobeIt] = lobeTotal * 4 * M_PI / float(samples.size());
+                rawMoments[lobeIt] = lobeTotal * sampleScale;
             }
             
             VectorXf x = gramInverse * rawMoments;

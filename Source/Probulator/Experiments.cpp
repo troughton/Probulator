@@ -24,7 +24,7 @@ inline T& addExperiment(ExperimentList& list, const char* name, const char* suff
 void addAllExperiments(ExperimentList& experiments)
 {
     const u32 lobeCount = 12; // <-- tweak this
-    const float lambda = 0.5f * lobeCount; // <-- tweak this; 
+    const float lambda = 8.f; // 0.5f * lobeCount; // <-- tweak this; 
 
     Experiment* experimentMCIS = &addExperiment<ExperimentMCIS>(experiments, "Monte Carlo [Importance Sampling]", "MCIS")
         .setSampleCount(5000)
@@ -52,16 +52,20 @@ void addAllExperiments(ExperimentList& experiments)
 		.setSolveType(ExperimentAmbientCube::SolveType::Projection)
 		.setInput(experimentMCIS);
     
-    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice Bezier [Least Squares]", "AD")
-        .setDiceType(AmbientDiceTypeBezier)
-        .setInput(experimentMCIS);
+//    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice Bezier [Least Squares]", "AD")
+//        .setDiceType(AmbientDiceTypeBezier)
+//        .setInput(experimentMCIS);
+//    
+//    addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice Bezier YCoCg [Least Squares]", "ADYCoCg")
+//    .setDiceType(AmbientDiceTypeBezierYCoCg)
+//    .setInput(experimentMCIS);
     
     addExperiment<ExperimentAmbientDice>(experiments, "Ambient Dice SRBF [Least Squares]", "ADRBF")
         .setDiceType(AmbientDiceTypeSRBF)
         .setInput(experimentMCIS);
     
-    addExperiment<ExperimentAmbientDiceIS>(experiments, "Ambient Dice IS [Least Squares]", "ADIS")
-    .setInput(experimentMCIS);
+//    addExperiment<ExperimentAmbientDiceIS>(experiments, "Ambient Dice IS [Least Squares]", "ADIS")
+//    .setInput(experimentMCIS);
 
     addExperiment<ExperimentSHL1Geomerics>(experiments, "Spherical Harmonics L1 [Geomerics]", "SHL1G");
 

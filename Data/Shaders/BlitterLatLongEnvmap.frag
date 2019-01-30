@@ -15,7 +15,7 @@ void main()
 	view.y = vPosition.y / uProjMatrix[1][1];
 	view.z = -1.0;
 	view = normalize(view * mat3(uViewMatrix));
-	vec2 texCoord = cartesianToLatLongTexcoord(view);
+	vec2 texCoord = cartesianToLatLongTexcoord(view.xzy);
 	vec4 color = texture(Texture0, texCoord);
 	color.rgb = tonemapLinear(color.rgb, uExposure);
 	color.rgb = applyDithering(color.rgb, gl_FragCoord.xy / uResolution, uElapsedTime);

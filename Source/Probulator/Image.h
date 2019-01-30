@@ -149,7 +149,7 @@ namespace Probulator
 	Image imageDifference(const Image& reference, const Image& image);
 	Image imageSymmetricAbsolutePercentageError(const Image& reference, const Image& image);
 	vec4 imageMeanSquareError(const Image& reference, const Image& image);
-    
+    vec4 imageEarthMoversDistance(const Image& reference, const Image& image);
     
     class ImageDouble : public ImageBase<double>
     {

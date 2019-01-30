@@ -64,7 +64,7 @@ public:
             for (u32 sampleIt = 0; sampleIt < sampleCount; ++sampleIt)
             {
                 vec2 sampleUv = vec2(sampleHalton(sampleIt + 1, 2), sampleHalton(sampleIt + 1, 3));
-                vec3 direction = m_basis * sampleUniformSphere(sampleUv);
+                vec3 direction = m_basis * (hemisphericalIntegral ? sampleUniformHemisphere(sampleUv.x, sampleUv.y) : sampleUniformSphere(sampleUv));
 
                 vec3 sample = (vec3)image.sampleNearest(cartesianToLatLongTexcoord(direction));
                 samples.push_back({ direction, sample });

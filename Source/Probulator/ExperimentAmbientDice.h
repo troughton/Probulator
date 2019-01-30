@@ -3,6 +3,28 @@
 #include <Probulator/Experiments.h>
 #include <Eigen/Eigen>
 
+inline glm::vec3 RGBToYCoCg( const glm::vec3 &rgb )
+{
+    glm::vec3 YCoCg;
+    
+    YCoCg.x =   0.25f  * rgb.r + 0.5f * rgb.g + 0.25f * rgb.b;
+    YCoCg.y =   0.5f   * rgb.r                  - 0.5f  * rgb.b;
+    YCoCg.z = - 0.25f  * rgb.r + 0.5f * rgb.g - 0.25f * rgb.b;
+    
+    return YCoCg;
+}
+
+inline glm::vec3 YCoCTo2RGB( const glm::vec3 &YCoCg )
+{
+    glm::vec3 rgb;
+    
+    rgb.x =  YCoCg.r + YCoCg.g - YCoCg.b;
+    rgb.y =  YCoCg.r + YCoCg.b;
+    rgb.z =  YCoCg.r - YCoCg.g - YCoCg.b;
+    
+    return rgb;
+}
+
 namespace Probulator {
     
     typedef long double float80;
@@ -15,6 +37,7 @@ namespace Probulator {
         
         static const vec3 vertexPositions[12];
         static const vec3 srbfNormalisedVertexPositions[6];
+        static const vec3 srbfHemisphereVertexPositions[9];
         static const vec3 tangents[12];
         static const vec3 bitangents[12];
         
@@ -121,9 +144,9 @@ namespace Probulator {
             *b2Out = dot(direction, n2);
         }
         
-        static Eigen::MatrixXd computeGramMatrixBezier();
-        static Eigen::MatrixXd computeGramMatrixSRBF();
-        
+        static Eigen::MatrixXd computeGramMatrixBezier(bool hemispherical = false);
+        static Eigen::MatrixXd computeGramMatrixSRBF(bool hemispherical = false);
+        static Eigen::MatrixXd computeGramMatrixLinear(bool hemispherical = false);
         
         template <typename T>
         static void hybridCubicBezierWeights(u32 triIndex, float b0, float b1, float b2, VertexWeights<T> *w0, VertexWeights<T> *w1, VertexWeights<T> *w2);
@@ -165,12 +188,40 @@ namespace Probulator {
             
             return  result;
         }
+        
+        inline vec3 evaluateBezierYCoCg(const vec3& direction) const
+        {
+            u32 i0, i1, i2;
+            AmbientDice::VertexWeights<float> weights[3];
+            this->hybridCubicBezierWeights(direction, &i0, &i1, &i2, &weights[0], &weights[1], &weights[2]);
+            
+            u32 triIndex;
+            float b0, b1, b2;
+            this->computeBarycentrics(direction, &triIndex, &i0, &i1, &i2, &b0, &b1, &b2);
+            
+            float Yresult =
+            weights[0].value * this->vertices[i0].value.r +
+            weights[0].directionalDerivativeU * this->vertices[i0].directionalDerivativeU.r +
+            weights[0].directionalDerivativeV * this->vertices[i0].directionalDerivativeV.r +
+            weights[1].value * this->vertices[i1].value.r +
+            weights[1].directionalDerivativeU * this->vertices[i1].directionalDerivativeU.r +
+            weights[1].directionalDerivativeV * this->vertices[i1].directionalDerivativeV.r +
+            weights[2].value * this->vertices[i2].value.r +
+            weights[2].directionalDerivativeU * this->vertices[i2].directionalDerivativeU.r +
+            weights[2].directionalDerivativeV * this->vertices[i2].directionalDerivativeV.r;
+            
+            float CoResult = b0 * this->vertices[i0].value.g + b1 * this->vertices[i1].value.g + b2 * this->vertices[i2].value.g;
+            float CgResult = b0 * this->vertices[i0].value.b + b1 * this->vertices[i1].value.b + b2 * this->vertices[i2].value.b;
+            
+            return YCoCTo2RGB(vec3(Yresult, CoResult, CgResult));
+        }
     };
 
     enum AmbientDiceType {
         AmbientDiceTypeLinear,
         AmbientDiceTypeBezier,
-        AmbientDiceTypeSRBF
+        AmbientDiceTypeSRBF,
+        AmbientDiceTypeBezierYCoCg
     };
     
     class ExperimentAmbientDice : public Experiment
@@ -179,7 +230,8 @@ namespace Probulator {
         
         static AmbientDice solveAmbientDiceRunningAverageSRBF(const ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceRunningAverageBezier(const ImageBase<vec3>& directions, const Image& irradiance);
-        static AmbientDice solveAmbientDiceLeastSquares(ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceLeastSquaresBezier(ImageBase<vec3>& directions, const Image& irradiance);
+        static AmbientDice solveAmbientDiceLeastSquaresBezierYCoCg(ImageBase<vec3>& directions, const Image& irradiance);
         static AmbientDice solveAmbientDiceLeastSquaresSRBF(ImageBase<vec3>& directions, const Image& irradiance);
         
         void run(SharedData& data) override;

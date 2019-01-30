@@ -72,25 +72,25 @@ namespace Probulator
 
 	inline mat3 makeOrthogonalBasis(vec3 n)
 	{
-		// http://orbit.dtu.dk/files/57573287/onb_frisvad_jgt2012.pdf
-
-		vec3 b1, b2;
-
-		if (n.z < -0.9999999f)
-		{
-			b1 = vec3(0.0f, -1.0f, 0.0f);
-			b2 = vec3(-1.0f, 0.0f, 0.0f);
-		}
-		else
-		{
-			const float a = 1.0f / (1.0f + n.z);
-			const float b = -n.x*n.y*a;
-			b1 = vec3(1.0f - n.x*n.x*a, b, -n.x);
-			b2 = vec3(b, 1.0f - n.y*n.y*a, -n.y);
-		}
+        float sign = copysign(1.0f, n.z);
+        const float a = -1.0f / (sign + n.z);
+        const float b = n.x * n.y * a;
+        vec3 b1(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
+        vec3 b2(b, sign + n.y * n.y * a, -n.y);
 		
 		return mat3(b1, b2, n);
 	}
+    
+    inline glm::dmat3 makeOrthogonalBasisDouble(glm::dvec3 n)
+    {
+        double sign = copysign(1.0, n.z);
+        const double a = -1.0 / (sign + n.z);
+        const double b = n.x * n.y * a;
+        glm::dvec3 b1(1.0 + sign * n.x * n.x * a, sign * b, -sign * n.x);
+        glm::dvec3 b2(b, sign + n.y * n.y * a, -n.y);
+        
+        return glm::dmat3(b1, b2, n);
+    }
 
 	inline float latLongTexelArea(ivec2 pos, ivec2 imageSize)
 	{
@@ -125,8 +125,8 @@ namespace Probulator
 	{
 		// http://gl.ict.usc.edu/Data/HighResProbes
 
-		float u = (1.0f + atan(p.x, -p.z) / pi);
-		float v = acos(p.y) / pi;
+		float u = (1.0f + atan(p.x, -p.y) / pi);
+		float v = acos(p.z) / pi;
 
 		return vec2(u * 0.5f, v);
 	}
@@ -139,8 +139,8 @@ namespace Probulator
 		float phi = pi*uv.y;
 
 		float x = sin(phi)*sin(theta);
-		float y = cos(phi);
-		float z = -sin(phi)*cos(theta);
+        float y = -sin(phi)*cos(theta);
+		float z = cos(phi);
 
 		return vec3(x, y, z);
 	}
@@ -188,6 +188,18 @@ namespace Probulator
 		return vec2(float(i) / float(n), vdc);
 	}
     
+    inline glm::dvec2 sampleHammersleyDouble(u32 i, u32 n)
+    {
+        u32 bits = i;
+        bits = (bits << 16u) | (bits >> 16u);
+        bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+        bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+        bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+        bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+        double vdc = float(bits) * 2.3283064365386963e-10f;
+        return glm::dvec2(double(i) / double(n), vdc);
+    }
+    
     inline float sampleHalton(u32 index, u32 base)
     {
         float f = 1.f;
@@ -196,6 +208,19 @@ namespace Probulator
         while (index > 0) {
             f = f / float(base);
             r += f * float(index % base);
+            index /= base;
+        }
+        return r;
+    }
+    
+    inline double sampleHaltonDouble(u32 index, u32 base)
+    {
+        double f = 1.f;
+        double r = 0.f;
+        
+        while (index > 0) {
+            f = f / double(base);
+            r += f * double(index % base);
             index /= base;
         }
         return r;
@@ -212,6 +237,18 @@ namespace Probulator
 
 		return vec3(cosPhi * sinTheta, sinPhi * sinTheta, cosTheta);
 	}
+    
+    inline glm::dvec3 sampleUniformHemisphereDouble(double u, double v)
+    {
+        double phi = v * twoPi;
+        double cosTheta = u;
+        double sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+        
+        double sinPhi = sin(phi);
+        double cosPhi = cos(phi);
+        
+        return glm::dvec3(cosPhi * sinTheta, sinPhi * sinTheta, cosTheta);
+    }
 
 	inline vec3 sampleVogelsSphere(u32 i, u32 n)
 	{
@@ -247,11 +284,31 @@ namespace Probulator
 
 		return vec3(x, y, z);
 	}
+    
+    inline glm::dvec3 sampleUniformSphereDouble(double u, double v)
+    {
+        double z = 1.0 - 2.0 * u;
+        double r = sqrt(max(0.0, 1.0 - z*z));
+        double phi = 2 * M_PI * v;
+        
+        double sinPhi = sin(phi);
+        double cosPhi = cos(phi);
+        
+        double x = r * cosPhi;
+        double y = r * sinPhi;
+        
+        return glm::dvec3(x, y, z);
+    }
 
 	inline vec3 sampleUniformSphere(vec2 uv)
 	{
 		return sampleUniformSphere(uv.x, uv.y);
 	}
+    
+    inline glm::dvec3 sampleUniformSphereDouble(glm::dvec2 uv)
+    {
+        return sampleUniformSphereDouble(uv.x, uv.y);
+    }
 
 	inline vec3 sampleCosineHemisphere(float u, float v)
 	{
@@ -268,7 +325,28 @@ namespace Probulator
 
 		return vec3(x, y, z);
 	}
+    
+    inline glm::dvec3 sampleCosineHemisphereDouble(double u, double v)
+    {
+        double phi = v * 2 * M_PI;
+        double cosTheta = sqrt(u);
+        double sinTheta = sqrt(1.0 - u);
+        
+        double sinPhi = sin(phi);
+        double cosPhi = cos(phi);
+        
+        double x = cosPhi * sinTheta;
+        double y = sinPhi * sinTheta;
+        double z = cosTheta;
+        
+        return glm::dvec3(x, y, z);
+    }
 
+    inline glm::dvec3 sampleCosineHemisphereDouble(const glm::dvec2& uv)
+    {
+        return sampleCosineHemisphereDouble(uv.x, uv.y);
+    }
+    
 	inline vec3 sampleCosineHemisphere(const vec2& uv)
 	{
 		return sampleCosineHemisphere(uv.x, uv.y);
@@ -289,6 +367,10 @@ namespace Probulator
     }
 
     inline vec3 F_Schlick(const vec3 &f0, float f90, float u) {
+        return f0 + (f90 - f0) * pow(1.f - u, 5.f);
+    }
+    
+    inline float F_Schlick(const float f0, float f90, float u) {
         return f0 + (f90 - f0) * pow(1.f - u, 5.f);
     }
     
@@ -321,6 +403,12 @@ namespace Probulator
         return 0.5f / (max(Lambda_GGXV + Lambda_GGXL, 1e-6f));
     }
     
+    inline float D_GGX(float NdotH, float alpha) {
+        float a2 = alpha * alpha;
+        float f = (NdotH * a2 - NdotH) * NdotH + 1;
+        return a2 / max(f * f, 1e-24f);
+    }
+    
     // Multiple-Scattering Microfacet BSDFs with the Smith Model
     // Heitz et. al.
     // https://jo.dreggn.org/home/2016_microfacets.pdf
@@ -350,8 +438,8 @@ namespace Probulator
         //    }
         
         // orthonormal basis
-        vec3 T1, T2;
-        constructOrthonormalBasis(V, &T1, &T2);
+        vec3 T1 = (V.z < 0.9999) ? normalize(cross(V, vec3(0,0,1))) : vec3(1,0,0);
+        vec3 T2 = cross(T1, V);
         
         // sample point with polar coordinates (r, phi)
         float a = 1.0 / (1.0 + V.z);

@@ -16,6 +16,10 @@ namespace Probulator {
             m_irradianceImage = Image(data.m_outputSize);
             data.m_directionImage.parallelForPixels2D([&](const vec3& direction, ivec2 pixelPos)
                                                       {
+                                                          if (upperHemisphereOnly && direction.z < 0.f) {
+                                                              m_irradianceImage.at(pixelPos) = vec4(0.f, 0.f, 0.f, 1.0f);
+                                                              return;
+                                                          }
                                                           mat3 basis = makeOrthogonalBasis(direction);
                                                           vec3 accum = vec3(0.0f);
                                                           for (u32 sampleIt = 0; sampleIt < m_hemisphereSampleCount; ++sampleIt)
@@ -23,6 +27,11 @@ namespace Probulator {
                                                               vec2 sampleUv = sampleHammersley(sampleIt, m_hemisphereSampleCount);
                                                               vec3 hemisphereDirection = sampleCosineHemisphere(sampleUv);
                                                               vec3 sampleDirection = basis * hemisphereDirection;
+                                                              
+                                                              if (upperHemisphereOnly && sampleDirection.z < 0.f) {
+                                                                  continue;
+                                                              }
+                                                              
                                                               accum += (vec3)m_radianceImage.sampleNearest(cartesianToLatLongTexcoord(sampleDirection));
                                                           }
                                                           
@@ -41,7 +50,7 @@ namespace Probulator {
                                                           {
                                                               vec2 sampleUv = sampleHammersley(sampleIt, m_hemisphereSampleCount);
                                                               
-                                                              vec3 f0 = vec3(1.0f);
+                                                              vec3 f0 = vec3(specularF0);
                                                               float f90 = 1.0;
                                                               
                                                               
@@ -108,6 +117,11 @@ namespace Probulator {
             m_irradianceImage = Image(data.m_outputSize);
             data.m_directionImage.parallelForPixels2D([&](const vec3& normal, ivec2 pixelPos)
                                                       {
+                                                          if (upperHemisphereOnly && normal.z < 0.f) {
+                                                              m_irradianceImage.at(pixelPos) = vec4(0.f, 0.f, 0.f, 1.0f);
+                                                              return;
+                                                          }
+                                                          
                                                           u32 pixelIndex = pixelPos.x + pixelPos.y * m_irradianceImage.getWidth();
                                                           u32 seed = m_jitterEnabled ? pixelIndex : 0;
                                                           std::mt19937 rng(seed);
@@ -118,6 +132,10 @@ namespace Probulator {
                                                               u32 sampleIndex = (u32)discreteDistribution(rng);
                                                               float sampleProbability = texelWeights[sampleIndex] / weightSum;
                                                               vec3 sampleDirection = data.m_directionImage.at(sampleIndex);
+                                                              if (upperHemisphereOnly && sampleDirection.z < 0.f) {
+                                                                  continue;
+                                                              }
+                                                              
                                                               float cosTerm = dotMax0(normal, sampleDirection);
                                                               float sampleArea = (float)texelAreas[sampleIndex];
                                                               vec3 sampleRadiance = (vec3)m_radianceImage.at(sampleIndex) * sampleArea;
@@ -130,15 +148,15 @@ namespace Probulator {
                                                       });
             
             
-            const u64 m_hemisphereSampleCount = 1024;
+            const u64 m_hemisphereSampleCount = 8192;
             
             Microsurface *microsurface = new MicrosurfaceConductor(false, false, ggxAlpha, ggxAlpha);
             
             m_specularImage = Image(data.m_outputSize);
             data.m_directionImage.parallelForPixels2D([&](const vec3& sampleDirection, ivec2 pixelPos)
                                                       {
-                                                          if (specularFixedNormal) {
-                                                              vec3 N = vec3(0, 1, 0);
+                                                          if (upperHemisphereOnly) {
+                                                              vec3 N = vec3(0, 0, 1);
                                                               mat3 basis = makeOrthogonalBasis(N);
                                                               
                                                               vec3 V = reflect(-sampleDirection, N);
@@ -155,7 +173,7 @@ namespace Probulator {
                                                               {
                                                                   vec2 sampleUv = sampleHammersley(sampleIt, m_hemisphereSampleCount);
                                                                   
-                                                                  vec3 f0 = vec3(1.0f);
+                                                                  vec3 f0 = vec3(specularF0);
                                                                   float f90 = 1.0;
                                                                   
                                                                   //Specular
@@ -170,8 +188,9 @@ namespace Probulator {
                                                                   
                                                                   vec3 sampleWeight = F * Vis;
                                                                   
-                                                                  vec3 sampleDirection = basis * microsurface->sample(V); // outgoingAngle;
-                                                                  accum += /* sampleWeight * */ (vec3)m_radianceImage.sampleBilinear(cartesianToLatLongTexcoord(normalize(sampleDirection)));
+//                                                                  vec3 sampleDirection = basis * microsurface->sample(V); // outgoingAngle;
+                                                                  vec3 sampleDirection = basis * outgoingAngle;
+                                                                  accum += sampleWeight * (vec3)m_radianceImage.sampleBilinear(cartesianToLatLongTexcoord(normalize(sampleDirection)));
                                                               }
                                                               
                                                               accum /= m_hemisphereSampleCount;
@@ -184,7 +203,7 @@ namespace Probulator {
                                                               {
                                                                   vec2 sampleUv = sampleHammersley(sampleIt, m_hemisphereSampleCount);
                                                                   
-                                                                  vec3 f0 = vec3(1.0f);
+                                                                  vec3 f0 = vec3(specularF0);
                                                                   float f90 = 1.0;
                                                                   
                                                                   const vec3 V = vec3(0, 0, 1);
@@ -201,8 +220,9 @@ namespace Probulator {
                                                                   
                                                                   vec3 sampleWeight = F * Vis;
                                                                   
-                                                                  vec3 sampleDirection = basis * microsurface->sample(V); //outgoingAngle;
-                                                                  accum += /* sampleWeight * */ (vec3)m_radianceImage.sampleBilinear(cartesianToLatLongTexcoord(normalize(sampleDirection)));
+//                                                                  vec3 sampleDirection = basis * microsurface->sample(V); //outgoingAngle;
+                                                                  vec3 sampleDirection = basis * outgoingAngle;
+                                                                  accum += sampleWeight * (vec3)m_radianceImage.sampleBilinear(cartesianToLatLongTexcoord(normalize(sampleDirection)));
                                                               }
                                                               
                                                               accum /= m_hemisphereSampleCount;
@@ -211,7 +231,7 @@ namespace Probulator {
                                                           }
                                                       });
             
-//            delete microsurface;
+            delete microsurface;
             
             data.GenerateIrradianceSamples(m_irradianceImage);
         }
